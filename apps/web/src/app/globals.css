@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Basic reset / defaults */
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
