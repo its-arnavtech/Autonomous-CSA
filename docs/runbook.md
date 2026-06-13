@@ -1,38 +1,34 @@
 # Runbook
 
-This runbook describes the current local prototype. It assumes Windows PowerShell from the repository root, but the commands are standard pnpm/Docker commands.
+This runbook describes the current Phase 1 local development flow.
 
 ## Prerequisites
 
-- Node.js compatible with the installed dependencies.
+- Node.js compatible with this workspace.
 - pnpm `10.29.1` or compatible.
 - Docker Desktop or another Docker runtime.
-- Redis available on `localhost:6379`.
+- Ports `3000`, `3001`, `3002`, `5432`, and `6379` available.
 
-## Local Environment
+## Environment
 
-Current local env files observed:
-
-- Root `.env`: `REDIS_HOST`, `REDIS_PORT`.
-- `apps/web/.env.local`: `API_BASE_URL`.
-
-These files are intentionally ignored by Git. A tracked `.env.example` does not exist yet.
-
-Recommended local values:
+Use `.env.example` as the local reference:
 
 ```bash
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support
 REDIS_HOST=localhost
 REDIS_PORT=6379
 API_BASE_URL=http://localhost:3001
 ```
 
-## Start Redis
+Do not commit real `.env` files.
+
+## Start Infrastructure
 
 ```bash
-docker compose up -d redis
+docker compose up -d redis postgres
 ```
 
-Verify Redis container status:
+Verify:
 
 ```bash
 docker compose ps
@@ -40,54 +36,54 @@ docker compose ps
 
 ## Install Dependencies
 
+PowerShell may block `pnpm.ps1`; use `pnpm.cmd` if needed.
+
 ```bash
-pnpm install
+pnpm.cmd install
 ```
+
+## Prepare Database
+
+Generate Prisma Client:
+
+```bash
+pnpm.cmd db:generate
+```
+
+Apply migrations:
+
+```bash
+pnpm.cmd db:migrate
+```
+
+Seed demo data:
+
+```bash
+pnpm.cmd db:seed
+```
+
+The seed creates `Organization.slug = "org_demo"` and one optional sample ticket.
 
 ## Run All Apps
 
-From the repo root:
-
 ```bash
-pnpm dev
+pnpm.cmd dev
 ```
 
-The root `dev` script sets `REDIS_HOST=localhost` and `REDIS_PORT=6379`, then runs `turbo dev`.
-
-Expected default ports:
+Expected ports:
 
 - Web: `http://localhost:3000`
 - API: `http://localhost:3001`
 - Worker: `http://localhost:3002`
 - Swagger: `http://localhost:3001/docs`
 
-## Run Apps Individually
-
-API:
+## Verify Health
 
 ```bash
-pnpm --filter @apps/api dev
+Invoke-RestMethod http://localhost:3001/health
 ```
 
-Worker:
-
-```bash
-pnpm --filter @apps/worker dev
-```
-
-Web:
-
-```bash
-pnpm --filter @apps/web dev
-```
-
-## Test Health Endpoint
-
-```bash
-curl http://localhost:3001/health
-```
-
-Expected response:
+Expected:
 
 ```json
 {"ok":true}
@@ -96,133 +92,111 @@ Expected response:
 ## Create a Ticket
 
 ```bash
-curl -X POST http://localhost:3001/tickets ^
-  -H "Content-Type: application/json" ^
-  -d "{\"orgId\":\"org_demo\",\"subject\":\"Login issue\",\"body\":\"I cannot log in\",\"customerEmail\":\"customer@example.com\"}"
+$body = @{
+  orgId = "org_demo"
+  subject = "Login issue"
+  body = "I cannot log in"
+  customerEmail = "customer@example.com"
+  customerName = "Demo Customer"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post `
+  -Uri http://localhost:3001/tickets `
+  -ContentType "application/json" `
+  -Body $body
 ```
 
-Expected response shape:
+Expected response:
 
 ```json
 {
-  "ticketId": "generated-uuid",
+  "ticketId": "generated-ticket-id",
   "enqueuedJobId": "bullmq-job-id"
 }
 ```
 
+## Verify Ticket List
+
+```bash
+Invoke-RestMethod "http://localhost:3001/tickets?orgId=org_demo"
+```
+
+## Verify Ticket Detail
+
+```bash
+Invoke-RestMethod "http://localhost:3001/tickets/<ticketId>?orgId=org_demo"
+```
+
+Expected: ticket fields plus `messages`.
+
 ## Verify Worker Processing
 
-Watch the worker terminal after creating a ticket. The current worker logs:
+Watch the worker terminal for:
 
 ```text
-[worker] processing ticket <ticketId> for org <orgId>
+[worker] processing ticket <ticketId> for org org_demo
 [worker] subject: <subject>
 ```
 
-The worker writes these timeline event types:
+## Verify Timeline API
 
+```bash
+Invoke-RestMethod "http://localhost:3001/tickets/<ticketId>/timeline?orgId=org_demo"
+```
+
+Expected event types:
+
+- `RUN_QUEUED`
 - `RUN_STARTED`
 - `ROUTER_DECISION`
 - `RUN_FINISHED`
 
-## Verify Timeline API
+## Verify Next Proxies
 
-Use the `ticketId` returned by `POST /tickets`:
-
-```bash
-curl "http://localhost:3001/tickets/<ticketId>/timeline?orgId=org_demo"
-```
-
-Expected response shape:
-
-```json
-[
-  {
-    "ts": "2026-01-01T00:00:00.000Z",
-    "type": "RUN_STARTED",
-    "payload": {
-      "jobId": "1",
-      "subject": "Login issue"
-    }
-  }
-]
-```
-
-If the worker has not processed the job yet, the response may be an empty array.
-
-## Verify Next Proxy
-
-Use the `ticketId` returned by `POST /tickets`:
+Ticket list proxy:
 
 ```bash
-curl "http://localhost:3000/api/tickets/<ticketId>/timeline?orgId=org_demo"
+Invoke-RestMethod "http://localhost:3000/api/tickets?orgId=org_demo"
 ```
 
-Expected response: the same JSON array returned by the API timeline endpoint. Upstream failures should return a JSON object with an `error` field, not an HTML page.
+Timeline proxy:
+
+```bash
+Invoke-RestMethod "http://localhost:3000/api/tickets/<ticketId>/timeline?orgId=org_demo"
+```
 
 ## Verify Web UI
 
-Open:
+Ticket inbox:
+
+```text
+http://localhost:3000/tickets?orgId=org_demo
+```
+
+Ticket timeline:
 
 ```text
 http://localhost:3000/tickets/<ticketId>?orgId=org_demo
 ```
 
-Expected UI behavior:
+The timeline page should render the Postgres-backed `AgentEvent` rows.
 
-- Shows ticket id and org id.
-- Fetches `/api/tickets/<ticketId>/timeline?orgId=org_demo`.
-- The Next proxy forwards to `http://localhost:3001/tickets/<ticketId>/timeline?orgId=org_demo`.
-- Renders timeline events.
-- Shows "No events yet" only when the returned JSON array is empty.
-- Shows a timeline error panel if the proxy/API fails or returns malformed JSON.
+## Build
 
-## Phase 0 Completion Checklist
-
-- [x] Redis runs via `docker compose up -d redis`.
-- [x] Web/API/worker run together via `pnpm dev`.
-- [x] `GET http://localhost:3001/health` returns `{ "ok": true }`.
-- [x] `POST http://localhost:3001/tickets` returns `{ ticketId, enqueuedJobId }`.
-- [x] Worker processes `ticket.process`.
-- [x] `GET http://localhost:3001/tickets/<ticketId>/timeline?orgId=org_demo` returns timeline events.
-- [x] `GET http://localhost:3000/api/tickets/<ticketId>/timeline?orgId=org_demo` returns timeline events as JSON.
-- [x] `http://localhost:3000/tickets/<ticketId>?orgId=org_demo` renders timeline events.
-- [ ] Git status is clean except expected source/doc changes.
+```bash
+pnpm.cmd build
+```
 
 ## Last Validation Notes
 
 Last validation run: June 13, 2026.
 
-- `pnpm.cmd install` succeeded after `pnpm install` was blocked by PowerShell execution policy.
-- `docker compose up -d redis` initially failed while Docker Desktop was unavailable, then succeeded after retry.
-- `pnpm dev` started web/API/worker; API and worker compiled with 0 errors, and Next became ready.
-- API route logs confirmed `Mapped {/tickets, POST}` and `Mapped {/tickets/:id/timeline, GET}`.
-- `GET http://127.0.0.1:3001/health` returned `{"ok":true}`.
-- `POST /tickets` returned ticket id `9e31cd83-990b-4a57-9ad1-96e058614796` and BullMQ job id `1`.
-- The worker processed `ticket.process` and wrote `RUN_STARTED`, `ROUTER_DECISION`, and `RUN_FINISHED`.
-- The API timeline endpoint returned all 3 events.
-- The Next proxy returned all 3 events as JSON.
-- The ticket page rendered all 3 timeline events in the browser.
-- `pnpm.cmd build` succeeded across the monorepo.
+- `docker compose up -d redis postgres` passed.
+- `pnpm.cmd install` passed.
+- `pnpm.cmd db:generate` passed.
+- Initial migration `20260613201721_init` was created and applied.
+- `pnpm.cmd db:seed` passed.
+- `pnpm.cmd dev` passed after Turbo `globalEnv` was updated for `DATABASE_URL`.
+- API health, ticket create/list/detail/timeline, Next proxies, ticket inbox, and ticket timeline UI passed.
+- `pnpm.cmd build` passed.
 
-## Other Useful Commands
-
-Build all apps:
-
-```bash
-pnpm build
-```
-
-Lint all apps:
-
-```bash
-pnpm lint
-```
-
-Run tests:
-
-```bash
-pnpm test
-```
-
-Note: current tests are starter tests and do not cover the ticket/queue/timeline path.

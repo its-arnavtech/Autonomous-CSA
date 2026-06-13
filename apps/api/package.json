@@ -27,6 +27,7 @@
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/swagger": "^11.2.6",
+    "@agentic-support/db": "workspace:*",
     "bullmq": "^5.67.3",
     "ioredis": "^5.9.2",
     "reflect-metadata": "^0.2.2",

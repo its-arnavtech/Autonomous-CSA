@@ -1,0 +1,133 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String          @id @default(uuid())
+  name      String
+  slug      String          @unique
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  tickets   Ticket[]
+  messages  TicketMessage[]
+  agentRuns AgentRun[]
+  events    AgentEvent[]
+}
+
+model Ticket {
+  id            String          @id @default(uuid())
+  orgId         String
+  subject       String
+  status        TicketStatus
+  priority      TicketPriority
+  customerEmail String
+  customerName  String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  organization  Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  messages      TicketMessage[]
+  agentRuns     AgentRun[]
+  events        AgentEvent[]
+
+  @@index([orgId])
+  @@index([orgId, status])
+}
+
+model TicketMessage {
+  id           String           @id @default(uuid())
+  orgId        String
+  ticketId     String
+  direction    MessageDirection
+  body         String
+  createdAt    DateTime         @default(now())
+  ticket       Ticket           @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  organization Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+}
+
+model AgentRun {
+  id             String          @id @default(uuid())
+  orgId          String
+  ticketId       String
+  status         AgentRunStatus
+  trigger        AgentRunTrigger
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  totalCostCents Int             @default(0)
+  errorCode      String?
+  errorMessage   String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  ticket         Ticket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  organization   Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  events         AgentEvent[]
+
+  @@index([ticketId])
+}
+
+model AgentEvent {
+  id           String          @id @default(uuid())
+  orgId        String
+  ticketId     String
+  runId        String?
+  type         AgentEventType
+  sequence     Int
+  payload      Json
+  latencyMs    Int?
+  costCents    Int?
+  createdAt    DateTime        @default(now())
+  ticket       Ticket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  organization Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  run          AgentRun?       @relation(fields: [runId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId])
+  @@index([runId])
+  @@index([orgId, ticketId, sequence])
+}
+
+enum TicketStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  ESCALATED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum AgentRunStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum AgentRunTrigger {
+  TICKET_CREATED
+  HUMAN_REQUESTED_RETRY
+  SCHEDULED
+}
+
+enum AgentEventType {
+  RUN_QUEUED
+  RUN_STARTED
+  ROUTER_DECISION
+  RUN_FINISHED
+  RUN_FAILED
+}

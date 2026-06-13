@@ -1,10 +1,11 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["DATABASE_URL", "REDIS_HOST", "REDIS_PORT", "API_BASE_URL"],
   "tasks": {
     "lint": { "cache": true },
     "typecheck": { "cache": true },
     "test": { "cache": true },
     "build": { "dependsOn": ["^build"], "outputs": [".next/**", "dist/**"] },
-    "dev": { "cache": false, "persistent": true }
+    "dev": { "dependsOn": ["^build"], "cache": false, "persistent": true }
   }
 }

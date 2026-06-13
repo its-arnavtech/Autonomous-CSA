@@ -1,19 +1,30 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
-import Redis from 'ioredis';
-
-const redis = new Redis({
-  host: process.env.REDIS_HOST ?? 'localhost',
-  port: process.env.REDIS_PORT ? Number(process.env.REDIS_PORT) : 6379,
-});
+import { BadRequestException, Controller, Get, Param, Query } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('tickets')
 export class TicketsTimelineController {
+  constructor(private readonly prisma: PrismaService) {}
+
   @Get(':id/timeline')
   async getTimeline(@Param('id') ticketId: string, @Query('orgId') orgId: string) {
-    if (!orgId) return { error: 'orgId is required' };
+    const orgSlug = orgId ?? 'org_demo';
+    const organization = await this.prisma.organization.findUnique({
+      where: { slug: orgSlug },
+    });
 
-    const key = `timeline:${orgId}:${ticketId}`;
-    const items = await redis.lrange(key, 0, -1);
-    return items.map((s) => JSON.parse(s));
+    if (!organization) {
+      throw new BadRequestException(`Unknown organization: ${orgSlug}`);
+    }
+
+    const events = await this.prisma.agentEvent.findMany({
+      where: { orgId: organization.id, ticketId },
+      orderBy: [{ sequence: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return events.map((event) => ({
+      ts: event.createdAt.toISOString(),
+      type: event.type,
+      payload: event.payload,
+    }));
   }
 }

@@ -1,93 +1,71 @@
 # Engineering Tradeoffs
 
-This repository is intentionally in a prototype foundation phase. The tradeoffs below describe what the current code does and why it is acceptable only as a stepping stone.
+## PostgreSQL Is Source Of Truth
 
-## Redis Timeline Is Temporary
-
-Current timeline events are written to Redis lists at `timeline:{orgId}:{ticketId}`. This is fast and convenient while proving the async worker loop, but Redis is not the right long-term audit system for AI decisions.
+Tickets, ticket messages, agent runs, and agent timeline events now live in PostgreSQL through Prisma. This is a major improvement over the Phase 0 Redis timeline because timeline data is durable, queryable, relational, and migration-backed.
 
 Tradeoff:
 
-- Good for rapid local iteration.
-- Poor durability and queryability.
-- No relational links to tickets, users, tenants, messages, or approvals.
-- No migration story or compliance posture.
+- Better auditability and product correctness.
+- More local setup complexity because Postgres and migrations are required.
+- More operational work remains before production, including backup, migration, and connection-pool strategy.
 
-Planned direction: persist timeline/audit events in PostgreSQL, likely in an `agent_events` table, while Redis remains the queue backend.
+## Redis Is Queue-Only
 
-## PostgreSQL `agent_events` Planned
-
-The product goal requires an auditable AI timeline. That should be modeled as durable event records with tenant id, ticket id, run id, event type, payload, timestamps, and actor/source metadata.
+Redis remains the BullMQ backend. It no longer stores the ticket timeline.
 
 Tradeoff:
 
-- Delaying the schema keeps the prototype small.
-- The longer Redis remains the source of truth, the more code will need to be unwound.
+- Cleaner responsibility boundary.
+- Redis loss no longer deletes ticket/audit history.
+- Queue durability/retry/dead-letter behavior still needs production hardening.
 
-## REST and Polling First
+## `orgId` Means Org Slug For Now
 
-The current interface is REST-first: `POST /tickets` creates/enqueues work, and `GET /tickets/:id/timeline` reads the timeline.
-
-Tradeoff:
-
-- Simple to inspect, test, and document.
-- Easy to proxy through Next.js.
-- Less real-time than WebSockets/SSE.
-
-Planned direction: keep REST as the baseline API and add polling, SSE, or WebSockets only after the lifecycle and event model are stable.
-
-## Queue-Based Async Worker
-
-Ticket processing is asynchronous through BullMQ and Redis. This is a good fit for AI workflows because routing, retrieval, tool calls, and drafting can be slow or retryable.
+The API continues accepting `orgId: "org_demo"` to preserve the Phase 0 request contract. In Phase 1, that value is resolved as `Organization.slug`, then the database `Organization.id` is used internally.
 
 Tradeoff:
 
-- Adds operational dependency on Redis.
-- Requires idempotency, retries, dead-letter handling, and observability before production.
-- Keeps API request latency low and separates user-facing HTTP from background work.
+- Keeps local and web compatibility simple.
+- Avoids exposing database ids in the basic request shape.
+- Not secure. A real auth and tenant context must replace this before production.
 
-## Next Proxy Route
+## Shared Prisma Package
 
-The web app uses a Next.js route handler to proxy timeline requests to the API instead of coupling browser code directly to the API host.
-
-Tradeoff:
-
-- Centralizes API base URL handling on the server side.
-- Avoids browser CORS concerns during local development.
-- Creates an extra hop and requires careful route param naming.
-
-Phase 0 note: the proxy route now uses the `[ticketId]` folder name and matching `params.ticketId` value.
-
-## Hardcoded `orgId` Is Temporary
-
-The web layer defaults missing `orgId` to `org_demo`, and `POST /tickets` accepts `orgId` from the request body.
+Prisma schema, migration, seed, and client exports live in `packages/db`. API and worker consume the shared database package, while each app owns its own simple Nest `PrismaService`.
 
 Tradeoff:
 
-- Useful for proving tenant-scoped keys before auth exists.
-- Not secure.
-- Not production multi-tenancy.
+- One schema and migration source for both API and worker.
+- The package must be built before API/worker runtime imports, so Turbo `dev` depends on workspace dependency builds.
+- Prisma Client generation is still required before first use.
 
-Planned direction: derive tenant context from authenticated user/session/JWT claims and enforce it in API middleware/guards and database queries.
+## REST And Polling First
 
-## Stubbed Router Decision
-
-The worker writes a hardcoded `ROUTER_DECISION` event with `DRAFT_FOR_HUMAN`, confidence `0.62`, and reason `stubbed`.
+The product still uses REST endpoints and server-side Next fetches. No WebSockets or SSE are implemented yet.
 
 Tradeoff:
 
-- Provides a visible timeline event contract before real agents exist.
-- Does not classify, retrieve, reason, draft, or take action.
+- Simple to validate and debug.
+- Good enough for early ticket/timeline pages.
+- Real-time updates will need polling, SSE, or WebSockets later.
 
-Planned direction: replace the stub with a real agent pipeline that performs classification, policy checks, retrieval, drafting, and human approval routing.
+## Stubbed Agent Decision
 
-## Swagger Before Full Schemas
-
-Swagger is mounted at `/docs`, but the API does not yet define rich DTO classes or decorators for request/response schemas.
+The worker still writes a hardcoded `ROUTER_DECISION` payload.
 
 Tradeoff:
 
-- Gives an API docs surface early.
-- Documentation quality is limited until DTOs are modeled.
+- Keeps Phase 1 focused on persistence and async orchestration.
+- Provides a stable event shape for the UI.
+- No actual OpenAI, RAG, policy checks, or tool calls are implemented yet.
 
-Planned direction: add DTO validation and OpenAPI annotations together so runtime behavior and docs stay aligned.
+## Minimal UI
+
+The web app has a timeline page and a small ticket inbox. It does not include ticket creation, auth, assignment, filtering, or approval UI.
+
+Tradeoff:
+
+- Enough UI to verify database-backed flows.
+- Avoids frontend expansion before core domain behavior stabilizes.
+

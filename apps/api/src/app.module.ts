@@ -2,11 +2,12 @@ import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { HealthController } from './health.controller';
+import { PrismaModule } from './prisma/prisma.module';
 import { QueueModule } from './queue/queue.module';
 import { TicketsModule } from './tickets/tickets.module';
 
 @Module({
-  imports: [QueueModule, TicketsModule],
+  imports: [PrismaModule, QueueModule, TicketsModule],
   controllers: [AppController, HealthController],
   providers: [AppService],
 })
