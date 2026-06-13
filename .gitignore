@@ -19,6 +19,7 @@ Thumbs.db
 # Node / Package managers
 ############################################
 node_modules/
+apps/**/node_modules/
 .pnpm-store/
 .pnpm-debug.log*
 npm-debug.log*
@@ -92,14 +93,6 @@ logs/
 Desktop.ini
 $RECYCLE.BIN/
 *.lnk
-
-############################################
-# Tests / Debug
-############################################
-*.spec.ts
-*.spec.js
-*.test.ts
-*.test.js
 
 ############################################
 # Misc

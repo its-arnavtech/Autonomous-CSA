@@ -6,53 +6,120 @@ type TimelineEvent = {
   payload: unknown;
 };
 
+type TicketPageProps = {
+  params: { ticketId: string } | Promise<{ ticketId: string }>;
+  searchParams: { orgId?: string } | Promise<{ orgId?: string }>;
+};
+
+function ErrorPanel({
+  ticketId,
+  orgId,
+  status,
+  statusText,
+  url,
+  detail,
+}: {
+  ticketId: string;
+  orgId: string;
+  status?: number;
+  statusText?: string;
+  url: string;
+  detail: string;
+}) {
+  return (
+    <div className="p-6 space-y-3">
+      <div>
+        <h1 className="text-2xl font-semibold">Ticket</h1>
+        <p className="text-sm text-gray-500 break-all">{ticketId}</p>
+        <p className="text-sm text-gray-500">Org: {orgId}</p>
+      </div>
+
+      <div className="rounded-xl border p-4">
+        <h2 className="text-lg font-semibold text-red-700">Failed to load timeline</h2>
+        {status ? (
+          <p className="mt-1 text-sm text-gray-600">
+            Status: {status} {statusText}
+          </p>
+        ) : null}
+        <p className="mt-2 text-xs text-gray-500 break-all">URL: {url}</p>
+        <pre className="mt-3 overflow-auto rounded-md bg-gray-50 p-3 text-xs text-black">
+          {detail}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
 export default async function TicketPage({
   params,
   searchParams,
-}: {
-  params: { ticketId: string };
-  searchParams: { orgId?: string };
-}) {
-  const ticketId = params.ticketId;
-  const orgId = searchParams.orgId ?? 'org_demo';
+}: TicketPageProps) {
+  const resolvedParams = await params;
+  const resolvedSearchParams = await searchParams;
+  const ticketId = resolvedParams.ticketId;
+  const orgId = resolvedSearchParams.orgId ?? 'org_demo';
 
   // Build an absolute URL so server-side fetch works reliably
   const h = await headers();
   const host = h.get('host');
   const proto = h.get('x-forwarded-proto') ?? 'http';
   const base = `${proto}://${host}`;
+  const timelineUrl = `${base}/api/tickets/${encodeURIComponent(ticketId)}/timeline?orgId=${encodeURIComponent(orgId)}`;
 
-  const res = await fetch(
-    `${base}/api/tickets/${ticketId}/timeline?orgId=${encodeURIComponent(orgId)}`,
-    { cache: 'no-store' },
-  );
+  let res: Response;
 
-  // Harden against HTML error pages (404/500) being returned
-  if (!res.ok) {
-    const text = await res.text();
+  try {
+    res = await fetch(timelineUrl, { cache: 'no-store' });
+  } catch (error) {
     return (
-      <div className="p-6 space-y-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Ticket</h1>
-          <p className="text-sm text-gray-500 break-all">{ticketId}</p>
-          <p className="text-sm text-gray-500">Org: {orgId}</p>
-        </div>
-
-        <div className="rounded-xl border p-4">
-          <h2 className="text-lg font-semibold text-red-700">Failed to load timeline</h2>
-          <p className="mt-1 text-sm text-gray-600">
-            Status: {res.status} {res.statusText}
-          </p>
-          <p className="mt-2 text-xs text-gray-500">URL: {`${base}/api/tickets/${ticketId}/timeline?orgId=${orgId}`}</p>
-          <pre className="mt-3 overflow-auto rounded-md bg-gray-50 p-3 text-xs text-black">
-            {text}
-          </pre>
-        </div>
-      </div>
+      <ErrorPanel
+        ticketId={ticketId}
+        orgId={orgId}
+        url={timelineUrl}
+        detail={error instanceof Error ? error.message : String(error)}
+      />
     );
   }
 
-  const events = (await res.json()) as TimelineEvent[];
+  if (!res.ok) {
+    const text = await res.text();
+    return (
+      <ErrorPanel
+        ticketId={ticketId}
+        orgId={orgId}
+        status={res.status}
+        statusText={res.statusText}
+        url={timelineUrl}
+        detail={text}
+      />
+    );
+  }
+
+  let events: TimelineEvent[];
+
+  try {
+    const body = await res.json();
+    if (!Array.isArray(body)) {
+      return (
+        <ErrorPanel
+          ticketId={ticketId}
+          orgId={orgId}
+          url={timelineUrl}
+          detail={JSON.stringify(body, null, 2)}
+        />
+      );
+    }
+    events = body as TimelineEvent[];
+  } catch (error) {
+    return (
+      <ErrorPanel
+        ticketId={ticketId}
+        orgId={orgId}
+        url={timelineUrl}
+        detail={error instanceof Error ? error.message : String(error)}
+      />
+    );
+  }
 
   return (
     <div className="p-6 space-y-4">
