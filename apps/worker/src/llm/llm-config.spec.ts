@@ -1,6 +1,9 @@
 import { loadLlmConfig } from './llm-config';
 
-function withEnv(overrides: Record<string, string | undefined>, fn: () => void) {
+function withEnv(
+  overrides: Record<string, string | undefined>,
+  fn: () => void,
+) {
   const originals: Record<string, string | undefined> = {};
   for (const key of Object.keys(overrides)) {
     originals[key] = process.env[key];
@@ -25,18 +28,15 @@ function withEnv(overrides: Record<string, string | undefined>, fn: () => void) 
 
 describe('loadLlmConfig', () => {
   it('returns deterministic defaults when no env vars set', () => {
-    withEnv(
-      { AI_PROVIDER: undefined, AI_API_KEY: undefined },
-      () => {
-        const config = loadLlmConfig();
-        expect(config.provider).toBe('deterministic');
-        expect(config.apiKey).toBeNull();
-        expect(config.enableFallback).toBe(true);
-        expect(config.timeoutMs).toBe(30000);
-        expect(config.maxOutputTokens).toBe(700);
-        expect(config.temperature).toBe(0.2);
-      },
-    );
+    withEnv({ AI_PROVIDER: undefined, AI_API_KEY: undefined }, () => {
+      const config = loadLlmConfig();
+      expect(config.provider).toBe('deterministic');
+      expect(config.apiKey).toBeNull();
+      expect(config.enableFallback).toBe(true);
+      expect(config.timeoutMs).toBe(30000);
+      expect(config.maxOutputTokens).toBe(700);
+      expect(config.temperature).toBe(0.2);
+    });
   });
 
   it('accepts openai provider', () => {

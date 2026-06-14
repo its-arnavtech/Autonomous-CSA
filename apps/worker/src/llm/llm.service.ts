@@ -2,7 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { ILlmProvider } from './llm-provider.interface';
 import { createLlmProvider } from './llm-provider.factory';
 import { loadLlmConfig } from './llm-config';
-import { LLMConfig, LLMRequest, LLMStructuredResponse, LLMTask } from './llm.types';
+import {
+  LLMConfig,
+  LLMRequest,
+  LLMStructuredResponse,
+  LLMTask,
+} from './llm.types';
 
 @Injectable()
 export class LlmService {
@@ -38,7 +43,10 @@ export class LlmService {
   }
 
   generateStructured<T>(
-    request: Omit<LLMRequest, 'model' | 'timeoutMs' | 'maxOutputTokens' | 'temperature'>,
+    request: Omit<
+      LLMRequest,
+      'model' | 'timeoutMs' | 'maxOutputTokens' | 'temperature'
+    >,
     validate: (raw: unknown) => T,
   ): Promise<LLMStructuredResponse<T>> {
     const fullRequest: LLMRequest = {

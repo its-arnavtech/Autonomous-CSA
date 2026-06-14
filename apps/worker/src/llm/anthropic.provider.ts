@@ -69,8 +69,7 @@ export class AnthropicProvider implements ILlmProvider {
     }
 
     const json = (await rawRes.json()) as AnthropicResponse;
-    const rawText =
-      json.content.find((c) => c.type === 'text')?.text ?? '';
+    const rawText = json.content.find((c) => c.type === 'text')?.text ?? '';
     const resolvedModel = json.model ?? request.model;
 
     const output = safeParseJson<T>(rawText, validate, request.schemaName);

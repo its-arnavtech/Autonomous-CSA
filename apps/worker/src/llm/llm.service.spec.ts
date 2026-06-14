@@ -1,6 +1,9 @@
 import { LlmService } from './llm.service';
 
-function withEnv(overrides: Record<string, string | undefined>, fn: () => void) {
+function withEnv(
+  overrides: Record<string, string | undefined>,
+  fn: () => void,
+) {
   const originals: Record<string, string | undefined> = {};
   for (const key of Object.keys(overrides)) {
     originals[key] = process.env[key];

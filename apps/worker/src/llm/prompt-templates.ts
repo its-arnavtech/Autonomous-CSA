@@ -48,10 +48,10 @@ export function validateRouterOutput(raw: unknown): RouterOutput {
 
   return {
     category: r.category as RouterOutput['category'],
-    intent: r.intent as string,
+    intent: r.intent,
     urgency: r.urgency as RouterOutput['urgency'],
-    confidence: Math.max(0, Math.min(1, r.confidence as number)),
-    notes: r.notes as string,
+    confidence: Math.max(0, Math.min(1, r.confidence)),
+    notes: r.notes,
   };
 }
 
@@ -77,7 +77,11 @@ export function buildResolverUserPrompt(input: {
   body: string;
   category: string;
   intent: string;
-  knowledgeSnippets: Array<{ articleId: string; title: string; snippet: string }>;
+  knowledgeSnippets: Array<{
+    articleId: string;
+    title: string;
+    snippet: string;
+  }>;
 }): string {
   const snippets =
     input.knowledgeSnippets.length > 0
@@ -115,9 +119,9 @@ export function validateResolverOutput(raw: unknown): ResolverOutput {
   }
 
   return {
-    draftBody: r.draftBody as string,
-    resolutionSummary: r.resolutionSummary as string,
-    confidence: Math.max(0, Math.min(1, r.confidence as number)),
+    draftBody: r.draftBody,
+    resolutionSummary: r.resolutionSummary,
+    confidence: Math.max(0, Math.min(1, r.confidence)),
     usedKnowledgeArticleIds: (r.usedKnowledgeArticleIds as unknown[]).filter(
       (id): id is string => typeof id === 'string',
     ),
@@ -148,7 +152,11 @@ export function buildCriticUserPrompt(input: {
   draftBody: string;
   category: string;
   usedKnowledgeArticleIds: string[];
-  knowledgeSnippets: Array<{ articleId: string; title: string; snippet: string }>;
+  knowledgeSnippets: Array<{
+    articleId: string;
+    title: string;
+    snippet: string;
+  }>;
 }): string {
   const snippets =
     input.knowledgeSnippets.length > 0
@@ -181,7 +189,9 @@ export function validateCriticOutput(raw: unknown): CriticOutput {
   if (typeof r.passed !== 'boolean') {
     throw new Error('missing passed');
   }
-  if (!['safe', 'needs_review', 'blocked'].includes(r.safetyVerdict as string)) {
+  if (
+    !['safe', 'needs_review', 'blocked'].includes(r.safetyVerdict as string)
+  ) {
     throw new Error(`invalid safetyVerdict: ${r.safetyVerdict}`);
   }
   if (typeof r.completenessScore !== 'number') {
@@ -190,15 +200,21 @@ export function validateCriticOutput(raw: unknown): CriticOutput {
   if (!Array.isArray(r.issues)) {
     throw new Error('missing issues');
   }
-  if (!['approve', 'human_review', 'revise'].includes(r.recommendedAction as string)) {
+  if (
+    !['approve', 'human_review', 'revise'].includes(
+      r.recommendedAction as string,
+    )
+  ) {
     throw new Error(`invalid recommendedAction: ${r.recommendedAction}`);
   }
 
   return {
-    passed: r.passed as boolean,
+    passed: r.passed,
     safetyVerdict: r.safetyVerdict as CriticOutput['safetyVerdict'],
-    completenessScore: Math.max(0, Math.min(1, r.completenessScore as number)),
-    issues: (r.issues as unknown[]).filter((i): i is string => typeof i === 'string'),
+    completenessScore: Math.max(0, Math.min(1, r.completenessScore)),
+    issues: (r.issues as unknown[]).filter(
+      (i): i is string => typeof i === 'string',
+    ),
     recommendedAction: r.recommendedAction as CriticOutput['recommendedAction'],
   };
 }

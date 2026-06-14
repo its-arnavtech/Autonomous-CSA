@@ -254,12 +254,12 @@ export class AgentRuntimeService {
           payload: {
             stepType: params.stepType,
             task: params.llmTask,
-            model: this.llmService!.getModelForTask(params.llmTask!),
+            model: this.llmService.getModelForTask(params.llmTask!),
           },
         });
 
         try {
-          const llmResult = await this.llmService!.generateStructured<TOutput>(
+          const llmResult = await this.llmService.generateStructured<TOutput>(
             {
               task: params.llmTask!,
               systemPrompt: params.llmSystemPrompt!,
@@ -312,10 +312,13 @@ export class AgentRuntimeService {
             ticketId: params.ticketId,
             runId: params.runId,
             type: LlmEventType.LLM_CALL_FAILED as AgentEventType,
-            payload: { stepType: params.stepType, message: llmMsg.slice(0, 500) },
+            payload: {
+              stepType: params.stepType,
+              message: llmMsg.slice(0, 500),
+            },
           });
 
-          if (!this.llmService!.isFallbackEnabled()) {
+          if (!this.llmService.isFallbackEnabled()) {
             throw llmErr;
           }
 
@@ -332,7 +335,7 @@ export class AgentRuntimeService {
 
           output = await params.execute();
           llmMeta = {
-            provider: this.llmService!.providerName,
+            provider: this.llmService.providerName,
             fallbackUsed: true,
           };
         }
@@ -360,7 +363,7 @@ export class AgentRuntimeService {
                 finishReason: llmMeta.finishReason,
               },
             } as Prisma.InputJsonValue)
-          : (output as Prisma.InputJsonValue);
+          : output;
 
       await this.prisma.agentStep.update({
         where: { id: step.id },

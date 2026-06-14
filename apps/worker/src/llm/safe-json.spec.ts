@@ -4,7 +4,7 @@ describe('safeParseJson', () => {
   function identity(raw: unknown): { value: string } {
     const r = raw as Record<string, unknown>;
     if (typeof r.value !== 'string') throw new Error('missing value');
-    return { value: r.value as string };
+    return { value: r.value };
   }
 
   it('parses valid JSON object and validates', () => {
@@ -13,27 +13,27 @@ describe('safeParseJson', () => {
   });
 
   it('throws on invalid JSON', () => {
-    expect(() =>
-      safeParseJson('not json', identity, 'TestSchema'),
-    ).toThrow(/Failed to parse JSON/);
+    expect(() => safeParseJson('not json', identity, 'TestSchema')).toThrow(
+      /Failed to parse JSON/,
+    );
   });
 
   it('throws when JSON is a non-object', () => {
-    expect(() =>
-      safeParseJson('"a string"', identity, 'TestSchema'),
-    ).toThrow(/Expected object/);
+    expect(() => safeParseJson('"a string"', identity, 'TestSchema')).toThrow(
+      /Expected object/,
+    );
   });
 
   it('throws when JSON is an array', () => {
-    expect(() =>
-      safeParseJson('[1, 2]', identity, 'TestSchema'),
-    ).toThrow(/Expected object/);
+    expect(() => safeParseJson('[1, 2]', identity, 'TestSchema')).toThrow(
+      /Expected object/,
+    );
   });
 
   it('throws when validation fails', () => {
-    expect(() =>
-      safeParseJson('{"wrong":1}', identity, 'TestSchema'),
-    ).toThrow(/Validation failed/);
+    expect(() => safeParseJson('{"wrong":1}', identity, 'TestSchema')).toThrow(
+      /Validation failed/,
+    );
   });
 
   it('strips whitespace before parsing', () => {

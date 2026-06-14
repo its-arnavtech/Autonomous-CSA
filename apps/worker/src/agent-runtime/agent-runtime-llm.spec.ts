@@ -1,4 +1,9 @@
-import { AgentEventType, AgentStepStatus, AgentStepType, LlmEventType } from '@agentic-support/db';
+import {
+  AgentEventType,
+  AgentStepStatus,
+  AgentStepType,
+  LlmEventType,
+} from '@agentic-support/db';
 import { AgentRuntimeService } from './agent-runtime.service';
 
 // Mock LlmService that succeeds or fails based on config
@@ -9,11 +14,7 @@ function mockLlmService(
     fail?: boolean;
   } = {},
 ) {
-  const {
-    enabled = true,
-    fallbackEnabled = true,
-    fail = false,
-  } = opts;
+  const { enabled = true, fallbackEnabled = true, fail = false } = opts;
 
   return {
     isEnabled: jest.fn().mockReturnValue(enabled),
@@ -22,45 +23,57 @@ function mockLlmService(
     getModelForTask: jest.fn().mockReturnValue('gpt-4o-mini'),
     generateStructured: fail
       ? jest.fn().mockRejectedValue(new Error('API timeout'))
-      : jest.fn().mockImplementation(async (request: unknown, validate: (raw: unknown) => unknown) => {
-          const { task } = request as { task: string };
-          let rawOutput: unknown;
-          if (task === 'ROUTER') {
-            rawOutput = {
-              category: 'billing',
-              intent: 'assist_billing_llm',
-              urgency: 'normal',
-              confidence: 0.95,
-              notes: 'LLM routing decision.',
-            };
-          } else if (task === 'RESOLVER') {
-            rawOutput = {
-              draftBody: 'Thank you for contacting us about your billing issue. We will review your account and follow up shortly.',
-              resolutionSummary: 'LLM billing response.',
-              confidence: 0.92,
-              usedKnowledgeArticleIds: [],
-            };
-          } else {
-            rawOutput = {
-              passed: true,
-              safetyVerdict: 'safe',
-              completenessScore: 0.9,
-              issues: [],
-              recommendedAction: 'approve',
-            };
-          }
-          return {
-            output: validate(rawOutput),
-            rawText: JSON.stringify(rawOutput),
-            provider: 'openai',
-            model: 'gpt-4o-mini',
-            usage: { inputTokens: 100, outputTokens: 80, totalTokens: 180, estimatedCostCents: 2 },
-          };
-        }),
+      : jest
+          .fn()
+          .mockImplementation(
+            async (request: unknown, validate: (raw: unknown) => unknown) => {
+              const { task } = request as { task: string };
+              let rawOutput: unknown;
+              if (task === 'ROUTER') {
+                rawOutput = {
+                  category: 'billing',
+                  intent: 'assist_billing_llm',
+                  urgency: 'normal',
+                  confidence: 0.95,
+                  notes: 'LLM routing decision.',
+                };
+              } else if (task === 'RESOLVER') {
+                rawOutput = {
+                  draftBody:
+                    'Thank you for contacting us about your billing issue. We will review your account and follow up shortly.',
+                  resolutionSummary: 'LLM billing response.',
+                  confidence: 0.92,
+                  usedKnowledgeArticleIds: [],
+                };
+              } else {
+                rawOutput = {
+                  passed: true,
+                  safetyVerdict: 'safe',
+                  completenessScore: 0.9,
+                  issues: [],
+                  recommendedAction: 'approve',
+                };
+              }
+              return {
+                output: validate(rawOutput),
+                rawText: JSON.stringify(rawOutput),
+                provider: 'openai',
+                model: 'gpt-4o-mini',
+                usage: {
+                  inputTokens: 100,
+                  outputTokens: 80,
+                  totalTokens: 180,
+                  estimatedCostCents: 2,
+                },
+              };
+            },
+          ),
   };
 }
 
-function createService(llmSvc: ReturnType<typeof mockLlmService> | null = null) {
+function createService(
+  llmSvc: ReturnType<typeof mockLlmService> | null = null,
+) {
   const prisma = {
     agentStep: {
       create: jest
@@ -147,13 +160,19 @@ describe('AgentRuntimeService — LLM integration', () => {
     expect(result.estimatedCostCents).toBe(6); // 3 steps × 2¢
 
     // LLM metadata is stored in outputJson._llm (separate columns pending prisma generate)
-    const updateCalls = prisma.agentStep.update.mock.calls as Array<[{ data: { outputJson?: Record<string, unknown> } }]>;
+    const updateCalls = prisma.agentStep.update.mock.calls as Array<
+      [{ data: { outputJson?: Record<string, unknown> } }]
+    >;
     const routerOutputJson = updateCalls[0]?.[0].data.outputJson ?? {};
-    expect((routerOutputJson._llm as Record<string, unknown>)?.provider).toBe('openai');
-
-    const eventTypes = (prisma.agentEvent.create.mock.calls as Array<[{ data: { type: AgentEventType } }]>).map(
-      ([args]) => args.data.type,
+    expect((routerOutputJson._llm as Record<string, unknown>)?.provider).toBe(
+      'openai',
     );
+
+    const eventTypes = (
+      prisma.agentEvent.create.mock.calls as Array<
+        [{ data: { type: AgentEventType } }]
+      >
+    ).map(([args]) => args.data.type);
     expect(eventTypes).toContain(LlmEventType.LLM_CALL_STARTED);
     expect(eventTypes).toContain(LlmEventType.LLM_CALL_SUCCEEDED);
     expect(eventTypes).toContain(LlmEventType.LLM_USAGE_RECORDED);
@@ -162,7 +181,11 @@ describe('AgentRuntimeService — LLM integration', () => {
   });
 
   it('falls back to deterministic when LLM fails and fallback is enabled', async () => {
-    const llm = mockLlmService({ enabled: true, fail: true, fallbackEnabled: true });
+    const llm = mockLlmService({
+      enabled: true,
+      fail: true,
+      fallbackEnabled: true,
+    });
     const { service, prisma, resolverAgent, routerAgent } = createService(llm);
 
     const result = await service.runPipeline({
@@ -178,15 +201,19 @@ describe('AgentRuntimeService — LLM integration', () => {
     expect(result.router.intent).toBe('assist_billing_deterministic');
     expect(result.estimatedCostCents).toBe(0); // fallback has no LLM cost
 
-    const eventTypes = (prisma.agentEvent.create.mock.calls as Array<[{ data: { type: AgentEventType } }]>).map(
-      ([args]) => args.data.type,
-    );
+    const eventTypes = (
+      prisma.agentEvent.create.mock.calls as Array<
+        [{ data: { type: AgentEventType } }]
+      >
+    ).map(([args]) => args.data.type);
     expect(eventTypes).toContain(LlmEventType.LLM_CALL_FAILED);
     expect(eventTypes).toContain(LlmEventType.LLM_FALLBACK_USED);
     expect(eventTypes).not.toContain(LlmEventType.LLM_CALL_SUCCEEDED);
 
     // In fallback mode, outputJson._llm.provider = llmProviderName, fallbackUsed = true
-    const updateCalls = prisma.agentStep.update.mock.calls as Array<[{ data: { outputJson?: Record<string, unknown> } }]>;
+    const updateCalls = prisma.agentStep.update.mock.calls as Array<
+      [{ data: { outputJson?: Record<string, unknown> } }]
+    >;
     const routerOutputJson = updateCalls[0]?.[0].data.outputJson ?? {};
     const llmMeta = routerOutputJson._llm as Record<string, unknown>;
     expect(llmMeta?.provider).toBe('openai');
@@ -194,7 +221,11 @@ describe('AgentRuntimeService — LLM integration', () => {
   });
 
   it('throws when LLM fails and fallback is disabled', async () => {
-    const llm = mockLlmService({ enabled: true, fail: true, fallbackEnabled: false });
+    const llm = mockLlmService({
+      enabled: true,
+      fail: true,
+      fallbackEnabled: false,
+    });
     const { service } = createService(llm);
 
     await expect(
@@ -224,9 +255,11 @@ describe('AgentRuntimeService — LLM integration', () => {
     expect(routerAgent.route).toHaveBeenCalled();
     expect(result.router.intent).toBe('assist_billing_deterministic');
 
-    const eventTypes = (prisma.agentEvent.create.mock.calls as Array<[{ data: { type: AgentEventType } }]>).map(
-      ([args]) => args.data.type,
-    );
+    const eventTypes = (
+      prisma.agentEvent.create.mock.calls as Array<
+        [{ data: { type: AgentEventType } }]
+      >
+    ).map(([args]) => args.data.type);
     expect(eventTypes).not.toContain(LlmEventType.LLM_CALL_STARTED);
   });
 
@@ -264,15 +297,23 @@ describe('AgentRuntimeService — LLM integration', () => {
         body: 'Body.',
       });
 
-      const createCalls = prisma.agentStep.create.mock.calls as Array<[{ data: { stepType: AgentStepType } }]>;
+      const createCalls = prisma.agentStep.create.mock.calls as Array<
+        [{ data: { stepType: AgentStepType } }]
+      >;
       expect(createCalls[0]?.[0].data.stepType).toBe(AgentStepType.ROUTER);
       expect(createCalls[1]?.[0].data.stepType).toBe(AgentStepType.RETRIEVER);
       expect(createCalls[2]?.[0].data.stepType).toBe(AgentStepType.RESOLVER);
       expect(createCalls[3]?.[0].data.stepType).toBe(AgentStepType.CRITIC);
 
-      const updateCalls = prisma.agentStep.update.mock.calls as Array<[{ data: { status: AgentStepStatus } }]>;
+      const updateCalls = prisma.agentStep.update.mock.calls as Array<
+        [{ data: { status: AgentStepStatus } }]
+      >;
       expect(updateCalls).toHaveLength(4);
-      expect(updateCalls.every(([args]) => args.data.status === AgentStepStatus.SUCCEEDED)).toBe(true);
+      expect(
+        updateCalls.every(
+          ([args]) => args.data.status === AgentStepStatus.SUCCEEDED,
+        ),
+      ).toBe(true);
     });
   });
 });

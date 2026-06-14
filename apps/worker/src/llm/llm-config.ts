@@ -39,7 +39,9 @@ const VALID_PROVIDERS = ['deterministic', 'openai', 'anthropic'] as const;
 export function loadLlmConfig(): LLMConfig {
   const providerRaw = process.env.AI_PROVIDER ?? 'deterministic';
 
-  if (!VALID_PROVIDERS.includes(providerRaw as (typeof VALID_PROVIDERS)[number])) {
+  if (
+    !VALID_PROVIDERS.includes(providerRaw as (typeof VALID_PROVIDERS)[number])
+  ) {
     throw new Error(
       `Invalid AI_PROVIDER "${providerRaw}". Valid values: ${VALID_PROVIDERS.join(', ')}`,
     );

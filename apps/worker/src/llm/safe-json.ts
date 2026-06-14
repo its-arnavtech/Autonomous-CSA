@@ -22,7 +22,9 @@ export function safeParseJson<T>(
     return validate(parsed);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`[safe-json] Validation failed for "${schemaName}": ${msg}`);
+    throw new Error(
+      `[safe-json] Validation failed for "${schemaName}": ${msg}`,
+    );
   }
 }
 
