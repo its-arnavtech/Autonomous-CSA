@@ -8,12 +8,14 @@ describe('GuardrailService', () => {
       agentGuardrailCheck: {
         create: jest.fn().mockResolvedValue({}),
       },
-      $transaction: jest.fn().mockImplementation(
-        async (arg: unknown[] | ((tx: unknown) => Promise<unknown>)) => {
-          if (typeof arg === 'function') return arg(prisma);
-          return Promise.all(arg as Promise<unknown>[]);
-        },
-      ),
+      $transaction: jest
+        .fn()
+        .mockImplementation(
+          async (arg: unknown[] | ((tx: unknown) => Promise<unknown>)) => {
+            if (typeof arg === 'function') return arg(prisma);
+            return Promise.all(arg as Promise<unknown>[]);
+          },
+        ),
     };
 
     return {
@@ -22,7 +24,9 @@ describe('GuardrailService', () => {
     };
   }
 
-  function baseCtx(overrides: Partial<GuardrailContext> = {}): GuardrailContext {
+  function baseCtx(
+    overrides: Partial<GuardrailContext> = {},
+  ): GuardrailContext {
     return {
       orgId: 'org_1',
       ticketId: 'ticket_1',
@@ -49,7 +53,9 @@ describe('GuardrailService', () => {
     const { aggregate, checks } = await service.runAll(baseCtx());
 
     expect(aggregate).toBe(GuardrailDecision.ALLOW);
-    expect(checks.every((c) => c.decision === GuardrailDecision.ALLOW)).toBe(true);
+    expect(checks.every((c) => c.decision === GuardrailDecision.ALLOW)).toBe(
+      true,
+    );
   });
 
   it('blocks when critic safetyVerdict is blocked', async () => {

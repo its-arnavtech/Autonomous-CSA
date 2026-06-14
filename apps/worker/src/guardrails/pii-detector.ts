@@ -4,7 +4,10 @@ const PII_PATTERNS: Array<{ pattern: RegExp; type: string }> = [
   { pattern: /\b[A-Z]{1,2}\d{6,9}\b/, type: 'passport_number' },
 ];
 
-export function detectPii(text: string): { detected: boolean; types: string[] } {
+export function detectPii(text: string): {
+  detected: boolean;
+  types: string[];
+} {
   const types = PII_PATTERNS.filter(({ pattern }) => pattern.test(text)).map(
     ({ type }) => type,
   );

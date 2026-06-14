@@ -120,7 +120,10 @@ export class SupportProcessor extends WorkerHost {
               ticketId,
               runId,
               type: AgentEventType.GUARDRAIL_PII_DETECTED,
-              payload: { reason: check.reason, metadata: (check.metadata ?? null) as Prisma.InputJsonValue },
+              payload: {
+                reason: check.reason,
+                metadata: (check.metadata ?? null) as Prisma.InputJsonValue,
+              },
             });
           } else if (
             check.guardrailType === 'SECRET_DETECTION' &&
@@ -131,7 +134,10 @@ export class SupportProcessor extends WorkerHost {
               ticketId,
               runId,
               type: AgentEventType.GUARDRAIL_SECRET_DETECTED,
-              payload: { reason: check.reason, metadata: (check.metadata ?? null) as Prisma.InputJsonValue },
+              payload: {
+                reason: check.reason,
+                metadata: (check.metadata ?? null) as Prisma.InputJsonValue,
+              },
             });
           } else if (
             check.guardrailType === 'COST_LIMIT' &&
@@ -142,7 +148,10 @@ export class SupportProcessor extends WorkerHost {
               ticketId,
               runId,
               type: AgentEventType.GUARDRAIL_COST_LIMIT_EXCEEDED,
-              payload: { reason: check.reason, metadata: (check.metadata ?? null) as Prisma.InputJsonValue },
+              payload: {
+                reason: check.reason,
+                metadata: (check.metadata ?? null) as Prisma.InputJsonValue,
+              },
             });
           } else if (
             check.guardrailType === 'KNOWLEDGE_GROUNDING' &&

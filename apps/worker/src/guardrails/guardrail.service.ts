@@ -42,7 +42,12 @@ export class GuardrailService {
   }
 
   private checkSafetyPolicy(ctx: GuardrailContext): GuardrailCheckResult {
-    const { criticPassed, criticSafetyVerdict, criticCompletenessScore, settings } = ctx;
+    const {
+      criticPassed,
+      criticSafetyVerdict,
+      criticCompletenessScore,
+      settings,
+    } = ctx;
 
     if (criticSafetyVerdict === 'blocked') {
       return {
@@ -53,12 +58,18 @@ export class GuardrailService {
     }
 
     const completenessPercent = Math.round(criticCompletenessScore * 100);
-    if (!criticPassed && completenessPercent < settings.minCriticCompletenessScore) {
+    if (
+      !criticPassed &&
+      completenessPercent < settings.minCriticCompletenessScore
+    ) {
       return {
         guardrailType: GuardrailType.SAFETY_POLICY,
         decision: GuardrailDecision.BLOCK,
         reason: `Completeness score ${completenessPercent}% below threshold ${settings.minCriticCompletenessScore}%`,
-        metadata: { completenessPercent, threshold: settings.minCriticCompletenessScore },
+        metadata: {
+          completenessPercent,
+          threshold: settings.minCriticCompletenessScore,
+        },
       };
     }
 
