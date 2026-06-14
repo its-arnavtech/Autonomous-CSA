@@ -173,10 +173,19 @@ export class SupportProcessor extends WorkerHost {
         return { ok: true };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        const errorDetails =
+          error instanceof Error
+            ? {
+                name: error.name,
+                message: error.message,
+                stack: error.stack,
+              }
+            : { value: String(error) };
+
         console.error('[worker] ticket processing failed', {
           ticketId,
           runId,
-          error,
+          error: errorDetails,
         });
 
         await this.appendAgentEvent({

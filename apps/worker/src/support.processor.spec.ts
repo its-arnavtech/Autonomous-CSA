@@ -55,10 +55,12 @@ describe('SupportProcessor', () => {
         aggregate: jest.fn().mockResolvedValue({ _max: { sequence: 1 } }),
         create: jest.fn().mockResolvedValue({}),
       },
-      $transaction: jest.fn().mockImplementation(
-        async (callback: (tx: typeof prisma) => Promise<unknown>) =>
-          callback(prisma),
-      ),
+      $transaction: jest
+        .fn()
+        .mockImplementation(
+          async (callback: (tx: typeof prisma) => Promise<unknown>) =>
+            callback(prisma),
+        ),
     };
 
     const agentRuntimeService = {

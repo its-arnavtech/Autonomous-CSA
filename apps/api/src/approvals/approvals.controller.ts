@@ -6,7 +6,11 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
-import { AgentEventType, ApprovalStatus, DraftStatus } from '@agentic-support/db';
+import {
+  AgentEventType,
+  ApprovalStatus,
+  DraftStatus,
+} from '@agentic-support/db';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
 import { SupportService } from '../support/support.service';

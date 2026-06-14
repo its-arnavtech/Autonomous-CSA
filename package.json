@@ -11,9 +11,14 @@
     "build": "turbo build",
     "db:generate": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support pnpm --filter @agentic-support/db db:generate",
     "db:migrate": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support pnpm --filter @agentic-support/db db:migrate",
+    "db:migrate:deploy": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support pnpm --filter @agentic-support/db db:migrate:deploy",
     "db:seed": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support pnpm --filter @agentic-support/db db:seed",
+    "db:validate": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support pnpm --filter @agentic-support/db db:validate",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
-    "test": "turbo test"
+    "test": "turbo test",
+    "ci": "pnpm db:generate && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "ci:security": "pnpm audit --audit-level high",
+    "ci:docker": "docker build -f apps/api/Dockerfile -t autonomous-csa-api:ci . && docker build -f apps/worker/Dockerfile -t autonomous-csa-worker:ci . && docker build -f apps/web/Dockerfile -t autonomous-csa-web:ci ."
   }
 }
