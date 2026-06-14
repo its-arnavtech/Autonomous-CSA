@@ -14,11 +14,32 @@
     "db:migrate:deploy": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support pnpm --filter @agentic-support/db db:migrate:deploy",
     "db:seed": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support pnpm --filter @agentic-support/db db:seed",
     "db:validate": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support pnpm --filter @agentic-support/db db:validate",
-    "lint": "turbo lint",
+    "lint": "pnpm --filter @agentic-support/db build && turbo lint",
     "typecheck": "pnpm --filter @agentic-support/db build && turbo typecheck",
     "test": "turbo test",
     "ci": "pnpm db:generate && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "ci:security": "pnpm audit --audit-level high",
     "ci:docker": "docker build -f apps/api/Dockerfile -t autonomous-csa-api:ci . && docker build -f apps/worker/Dockerfile -t autonomous-csa-worker:ci . && docker build -f apps/web/Dockerfile -t autonomous-csa-web:ci ."
+  },
+  "pnpm": {
+    "overrides": {
+      "@nestjs/core": "^11.1.18",
+      "fast-uri": "^3.1.2",
+      "file-type": "^21.3.2",
+      "flatted": "^3.4.2",
+      "handlebars": "^4.7.9",
+      "lodash": "^4.18.0",
+      "minimatch@<3.1.4": "3.1.4",
+      "minimatch@>=9.0.0 <9.0.7": "9.0.7",
+      "minimatch@>=10.0.0 <10.2.3": "10.2.5",
+      "multer": "^2.1.1",
+      "path-to-regexp": "^8.4.0",
+      "picomatch@<2.3.2": "2.3.2",
+      "picomatch@>=4.0.0 <4.0.4": "4.0.4",
+      "postcss": "^8.5.15",
+      "qs": "^6.15.2",
+      "serialize-javascript": "^7.0.3",
+      "uuid": "^11.1.1"
+    }
   }
 }
