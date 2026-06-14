@@ -75,10 +75,12 @@ export class SupportProcessor extends WorkerHost {
         });
 
         const draftBody = pipeline.resolver.draftBody;
-        const estimatedCostCents = estimateCostCents({
-          subject,
-          draftBody,
-        });
+        // Use actual LLM cost when available; fall back to text-length estimate
+        const pipelineCost = pipeline.estimatedCostCents ?? 0;
+        const estimatedCostCents =
+          pipelineCost > 0
+            ? pipelineCost
+            : estimateCostCents({ subject, draftBody });
 
         await this.appendAgentEvent({
           orgId,

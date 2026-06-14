@@ -88,19 +88,24 @@ model AgentRun {
 }
 
 model AgentStep {
-  id           String          @id @default(uuid())
-  orgId        String
-  agentRunId   String
-  stepType     AgentStepType
-  status       AgentStepStatus
-  inputJson    Json?
-  outputJson   Json?
-  errorMessage String?
-  startedAt    DateTime        @default(now())
-  finishedAt   DateTime?
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  agentRun     AgentRun        @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+  id                 String          @id @default(uuid())
+  orgId              String
+  agentRunId         String
+  stepType           AgentStepType
+  status             AgentStepStatus
+  inputJson          Json?
+  outputJson         Json?
+  errorMessage       String?
+  provider           String?
+  model              String?
+  inputTokens        Int?
+  outputTokens       Int?
+  estimatedCostCents Int?
+  startedAt          DateTime        @default(now())
+  finishedAt         DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  agentRun           AgentRun        @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
 
   @@index([orgId, agentRunId, stepType])
   @@index([orgId, createdAt])
@@ -336,6 +341,11 @@ enum AgentEventType {
   GUARDRAIL_SECRET_DETECTED
   GUARDRAIL_COST_LIMIT_EXCEEDED
   GUARDRAIL_KNOWLEDGE_GROUNDING_FAILED
+  LLM_CALL_STARTED
+  LLM_CALL_SUCCEEDED
+  LLM_CALL_FAILED
+  LLM_FALLBACK_USED
+  LLM_USAGE_RECORDED
 }
 
 enum KnowledgeArticleStatus {

@@ -25,3 +25,4 @@ export type {
 } from './knowledge-search';
 export { nextEventSequence } from './event-sequence';
 export { GuardrailDecision, GuardrailType } from './guardrail-enums';
+export { LlmEventType } from './llm-event-types';

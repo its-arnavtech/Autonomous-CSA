@@ -108,6 +108,7 @@ describe('AgentRuntimeService', () => {
         retrieverAgent as never,
         resolverAgent as never,
         criticAgent as never,
+        null, // no LlmService — deterministic mode
       ),
     };
   }
