@@ -10,3 +10,7 @@ A web app where a “company” can connect an inbox (start with a built-in inbo
 - Built initial Ticket page UI to render agent timeline
 - Hardened server-side fetching and error handling
 - Fixed App Router layout requirements and global styles
+
+## CI/CD
+
+GitHub Actions now cover quality checks, Prisma migration validation, security scanning, Docker build readiness, CodeQL, and Dependabot hygiene. See [docs/CI_CD.md](/C:/Autonomous-CSA/docs/CI_CD.md) for the workflow breakdown, local equivalent commands, and failure handling guidance.
