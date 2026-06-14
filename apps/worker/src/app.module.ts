@@ -10,6 +10,7 @@ import { ResolverAgent } from './agent-runtime/resolver.agent';
 import { RouterAgent } from './agent-runtime/router.agent';
 import { SupportProcessor } from './support.processor';
 import { GuardrailService } from './guardrails/guardrail.service';
+import { LlmService } from './llm/llm.service';
 
 const redisHost = process.env.REDIS_HOST ?? 'localhost';
 const redisPort = process.env.REDIS_PORT
@@ -34,6 +35,7 @@ const redisPort = process.env.REDIS_PORT
     ResolverAgent,
     CriticAgent,
     GuardrailService,
+    LlmService,
   ],
 })
 export class AppModule {}

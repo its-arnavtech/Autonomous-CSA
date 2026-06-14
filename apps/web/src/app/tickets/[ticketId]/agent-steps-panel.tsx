@@ -1,3 +1,14 @@
+type LlmMeta = {
+  provider?: string;
+  model?: string;
+  fallbackUsed?: boolean;
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    estimatedCostCents?: number;
+  };
+};
+
 type AgentStep = {
   id: string;
   stepType: string;
@@ -9,48 +20,129 @@ type AgentStep = {
   finishedAt?: string | null;
 };
 
+const STATUS_COLORS: Record<string, string> = {
+  SUCCEEDED: 'bg-emerald-100 text-emerald-800',
+  BLOCKED: 'bg-rose-100 text-rose-800',
+  FAILED: 'bg-rose-100 text-rose-800',
+  STARTED: 'bg-amber-100 text-amber-800',
+};
+
+const PROVIDER_COLORS: Record<string, string> = {
+  openai: 'bg-green-100 text-green-800',
+  anthropic: 'bg-violet-100 text-violet-800',
+  deterministic: 'bg-slate-100 text-slate-600',
+};
+
+function ProviderBadge({
+  provider,
+  model,
+  fallbackUsed,
+}: {
+  provider?: string | null;
+  model?: string | null;
+  fallbackUsed?: boolean;
+}) {
+  if (!provider) return null;
+  const colorClass =
+    PROVIDER_COLORS[provider] ?? 'bg-slate-100 text-slate-600';
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${colorClass}`}
+    >
+      {provider}
+      {model ? ` · ${model}` : ''}
+      {fallbackUsed ? ' (fallback)' : ''}
+    </span>
+  );
+}
+
 export function AgentStepsPanel({ steps }: { steps: AgentStep[] }) {
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <h2 className="text-lg font-semibold text-slate-900">Agent Runtime</h2>
       <div className="mt-4 space-y-3">
         {steps.length === 0 ? (
-          <p className="text-sm text-slate-500">No agent runtime steps recorded yet.</p>
+          <p className="text-sm text-slate-500">
+            No agent runtime steps recorded yet.
+          </p>
         ) : (
-          steps.map((step) => (
-            <article key={step.id} className="rounded-2xl border border-slate-200 p-4">
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="font-medium text-slate-900">{step.stepType}</div>
-                  <div className="text-sm text-slate-500">Status: {step.status}</div>
+          steps.map((step) => {
+            const statusColor =
+              STATUS_COLORS[step.status] ?? 'bg-slate-100 text-slate-700';
+            const outputObj =
+              typeof step.outputJson === 'object' && step.outputJson !== null
+                ? (step.outputJson as Record<string, unknown>)
+                : null;
+            const llm = (outputObj?._llm ?? null) as LlmMeta | null;
+
+            return (
+              <article
+                key={step.id}
+                className="rounded-2xl border border-slate-200 p-4"
+              >
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-slate-900">
+                      {step.stepType}
+                    </span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusColor}`}
+                    >
+                      {step.status}
+                    </span>
+                    {llm?.provider ? (
+                      <ProviderBadge
+                        provider={llm.provider}
+                        model={llm.model}
+                        fallbackUsed={llm.fallbackUsed}
+                      />
+                    ) : null}
+                  </div>
+                  <div className="text-right text-xs text-slate-400">
+                    <div>Started {new Date(step.startedAt).toLocaleString()}</div>
+                    {step.finishedAt ? (
+                      <div>
+                        Finished {new Date(step.finishedAt).toLocaleString()}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
-                <div className="text-right text-xs text-slate-400">
-                  <div>Started {new Date(step.startedAt).toLocaleString()}</div>
-                  {step.finishedAt ? (
-                    <div>Finished {new Date(step.finishedAt).toLocaleString()}</div>
-                  ) : null}
-                </div>
-              </div>
-              {step.errorMessage ? (
-                <p className="mt-3 text-sm text-rose-700">{step.errorMessage}</p>
-              ) : null}
-              <details className="mt-3 rounded-2xl bg-slate-50 p-3">
-                <summary className="cursor-pointer text-sm font-medium text-slate-700">
-                  View step payload
-                </summary>
-                <pre className="mt-3 overflow-auto rounded-2xl bg-slate-950 p-3 text-xs text-slate-100">
-                  {JSON.stringify(
-                    {
-                      input: step.inputJson,
-                      output: step.outputJson,
-                    },
-                    null,
-                    2,
-                  )}
-                </pre>
-              </details>
-            </article>
-          ))
+
+                {/* LLM usage row */}
+                {llm?.usage ? (
+                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
+                    {llm.usage.inputTokens != null && (
+                      <span>
+                        {llm.usage.inputTokens} in / {llm.usage.outputTokens ?? 0} out tokens
+                      </span>
+                    )}
+                    {llm.usage.estimatedCostCents != null && (
+                      <span>~{llm.usage.estimatedCostCents}¢ est. cost</span>
+                    )}
+                  </div>
+                ) : null}
+
+                {step.errorMessage ? (
+                  <p className="mt-3 text-sm text-rose-700">
+                    {step.errorMessage}
+                  </p>
+                ) : null}
+
+                <details className="mt-3 rounded-2xl bg-slate-50 p-3">
+                  <summary className="cursor-pointer text-sm font-medium text-slate-700">
+                    View step payload
+                  </summary>
+                  <pre className="mt-3 overflow-auto rounded-2xl bg-slate-950 p-3 text-xs text-slate-100">
+                    {JSON.stringify(
+                      { input: step.inputJson, output: step.outputJson },
+                      null,
+                      2,
+                    )}
+                  </pre>
+                </details>
+              </article>
+            );
+          })
         )}
       </div>
     </div>
