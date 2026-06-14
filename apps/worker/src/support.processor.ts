@@ -3,11 +3,15 @@ import { Job } from 'bullmq';
 import {
   AgentEventType,
   AgentRunStatus,
+  ApprovalStatus,
   DraftStatus,
+  GuardrailDecision,
   Prisma,
   nextEventSequence,
 } from '@agentic-support/db';
 import { AgentRuntimeService } from './agent-runtime/agent-runtime.service';
+import { GuardrailService } from './guardrails/guardrail.service';
+import { estimateCostCents } from './guardrails/cost-estimator';
 import { PrismaService } from './prisma.service';
 
 type TicketProcessJob = {
@@ -20,14 +24,12 @@ type TicketProcessJob = {
   customerEmail: string;
 };
 
-const pendingApprovalStatus = 'PENDING' as const;
-const humanStubApprover = 'human_stub';
-
 @Processor('support')
 export class SupportProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly agentRuntimeService: AgentRuntimeService,
+    private readonly guardrailService: GuardrailService,
   ) {
     super();
   }
@@ -57,7 +59,6 @@ export class SupportProcessor extends WorkerHost {
         console.log(
           `[worker] processing ticket ${ticketId} for org ${orgSlug ?? orgId}`,
         );
-        console.log(`[worker] subject: ${subject}`);
 
         const pipeline = await this.agentRuntimeService.runPipeline({
           orgId,
@@ -73,23 +74,110 @@ export class SupportProcessor extends WorkerHost {
           create: { orgId },
         });
 
-        const criticBlocked = !pipeline.critic.passed;
+        const draftBody = pipeline.resolver.draftBody;
+        const estimatedCostCents = estimateCostCents({
+          subject,
+          draftBody,
+        });
+
+        await this.appendAgentEvent({
+          orgId,
+          ticketId,
+          runId,
+          type: AgentEventType.GUARDRAIL_STARTED,
+          payload: { estimatedCostCents },
+        });
+
+        const { checks, aggregate } = await this.guardrailService.runAll({
+          orgId,
+          ticketId,
+          agentRunId: runId,
+          draftBody,
+          resolverConfidence: pipeline.resolver.confidence,
+          usedKnowledgeArticleIds:
+            pipeline.resolver.usedKnowledgeArticleIds ?? [],
+          criticPassed: pipeline.critic.passed,
+          criticSafetyVerdict: pipeline.critic.safetyVerdict,
+          criticCompletenessScore: pipeline.critic.completenessScore,
+          estimatedCostCents,
+          settings: {
+            maxAutoSendCostCents: settings.maxAutoSendCostCents,
+            requireApprovalForLowConfidence:
+              settings.requireApprovalForLowConfidence,
+            blockOnPiiDetection: settings.blockOnPiiDetection,
+            minCriticCompletenessScore: settings.minCriticCompletenessScore,
+          },
+        });
+
+        // Emit specific detection events
+        for (const check of checks) {
+          if (
+            check.guardrailType === 'PII_DETECTION' &&
+            check.decision !== GuardrailDecision.ALLOW
+          ) {
+            await this.appendAgentEvent({
+              orgId,
+              ticketId,
+              runId,
+              type: AgentEventType.GUARDRAIL_PII_DETECTED,
+              payload: { reason: check.reason, metadata: (check.metadata ?? null) as Prisma.InputJsonValue },
+            });
+          } else if (
+            check.guardrailType === 'SECRET_DETECTION' &&
+            check.decision !== GuardrailDecision.ALLOW
+          ) {
+            await this.appendAgentEvent({
+              orgId,
+              ticketId,
+              runId,
+              type: AgentEventType.GUARDRAIL_SECRET_DETECTED,
+              payload: { reason: check.reason, metadata: (check.metadata ?? null) as Prisma.InputJsonValue },
+            });
+          } else if (
+            check.guardrailType === 'COST_LIMIT' &&
+            check.decision !== GuardrailDecision.ALLOW
+          ) {
+            await this.appendAgentEvent({
+              orgId,
+              ticketId,
+              runId,
+              type: AgentEventType.GUARDRAIL_COST_LIMIT_EXCEEDED,
+              payload: { reason: check.reason, metadata: (check.metadata ?? null) as Prisma.InputJsonValue },
+            });
+          } else if (
+            check.guardrailType === 'KNOWLEDGE_GROUNDING' &&
+            check.decision !== GuardrailDecision.ALLOW
+          ) {
+            await this.appendAgentEvent({
+              orgId,
+              ticketId,
+              runId,
+              type: AgentEventType.GUARDRAIL_KNOWLEDGE_GROUNDING_FAILED,
+              payload: { reason: check.reason },
+            });
+          }
+        }
+
+        // Create draft with status determined by guardrail aggregate
+        const draftStatus =
+          aggregate === GuardrailDecision.BLOCK
+            ? DraftStatus.DRAFT
+            : aggregate === GuardrailDecision.REQUIRE_APPROVAL
+              ? DraftStatus.PENDING_APPROVAL
+              : settings.requireHumanApproval
+                ? DraftStatus.PENDING_APPROVAL
+                : DraftStatus.APPROVED;
+
         const draft = await this.prisma.outboundDraft.create({
           data: {
             orgId,
             ticketId,
             agentRunId: runId,
-            body: pipeline.resolver.draftBody,
-            status: criticBlocked
-              ? DraftStatus.DRAFT
-              : settings.requireHumanApproval
-                ? DraftStatus.PENDING_APPROVAL
-                : DraftStatus.APPROVED,
+            body: draftBody,
+            status: draftStatus,
             createdBy: 'agent_stub',
             approvedBy:
-              criticBlocked || settings.requireHumanApproval
-                ? null
-                : humanStubApprover,
+              draftStatus === DraftStatus.APPROVED ? 'agent_stub' : null,
           },
         });
 
@@ -98,33 +186,43 @@ export class SupportProcessor extends WorkerHost {
           ticketId,
           runId,
           type: AgentEventType.DRAFT_CREATED,
-          payload: {
-            draftId: draft.id,
-            status: draft.status,
-          },
+          payload: { draftId: draft.id, status: draft.status },
         });
 
-        if (criticBlocked) {
+        // Branch on aggregate guardrail decision
+        if (aggregate === GuardrailDecision.BLOCK) {
           await this.appendAgentEvent({
             orgId,
             ticketId,
             runId,
-            type: AgentEventType.CRITIC_BLOCKED,
+            type: AgentEventType.GUARDRAIL_BLOCKED,
             payload: {
               draftId: draft.id,
-              status: draft.status,
-              issues: pipeline.critic.issues,
+              checks: checks.map((c) => ({
+                type: c.guardrailType,
+                decision: c.decision,
+                reason: c.reason,
+              })),
             },
           });
-        } else if (settings.requireHumanApproval) {
+        } else if (
+          aggregate === GuardrailDecision.REQUIRE_APPROVAL ||
+          settings.requireHumanApproval
+        ) {
+          // Guardrail requires approval, OR org policy requires human approval
+          const approvalEventType =
+            aggregate === GuardrailDecision.REQUIRE_APPROVAL
+              ? AgentEventType.GUARDRAIL_REQUIRES_APPROVAL
+              : AgentEventType.HUMAN_APPROVAL_CREATED;
+
           await this.prisma.humanApproval.create({
             data: {
               orgId,
               ticketId,
               agentRunId: runId,
               outboundDraftId: draft.id,
-              status: pendingApprovalStatus,
-              proposedResponse: pipeline.resolver.draftBody,
+              status: ApprovalStatus.PENDING,
+              proposedResponse: draftBody,
             },
           });
 
@@ -132,11 +230,11 @@ export class SupportProcessor extends WorkerHost {
             orgId,
             ticketId,
             runId,
-            type: AgentEventType.HUMAN_APPROVAL_CREATED,
+            type: approvalEventType,
             payload: {
-              status: pendingApprovalStatus,
-              proposedResponse: pipeline.resolver.draftBody,
               draftId: draft.id,
+              status: ApprovalStatus.PENDING,
+              proposedResponse: draftBody,
             },
           });
         } else {
@@ -144,11 +242,18 @@ export class SupportProcessor extends WorkerHost {
             orgId,
             ticketId,
             runId,
-            type: AgentEventType.DRAFT_AUTO_APPROVED,
+            type: AgentEventType.GUARDRAIL_CHECK_PASSED,
             payload: {
               draftId: draft.id,
-              status: DraftStatus.APPROVED,
+              checksCount: checks.length,
             },
+          });
+          await this.appendAgentEvent({
+            orgId,
+            ticketId,
+            runId,
+            type: AgentEventType.DRAFT_AUTO_APPROVED,
+            payload: { draftId: draft.id, status: DraftStatus.APPROVED },
           });
         }
 
@@ -157,15 +262,19 @@ export class SupportProcessor extends WorkerHost {
           ticketId,
           runId,
           type: AgentEventType.RUN_FINISHED,
-          payload: { status: 'SUCCEEDED' },
+          payload: {
+            status:
+              aggregate === GuardrailDecision.BLOCK ? 'BLOCKED' : 'SUCCEEDED',
+          },
         });
 
         await this.prisma.agentRun.update({
           where: { id: runId },
           data: {
-            status: criticBlocked
-              ? AgentRunStatus.BLOCKED
-              : AgentRunStatus.SUCCEEDED,
+            status:
+              aggregate === GuardrailDecision.BLOCK
+                ? AgentRunStatus.BLOCKED
+                : AgentRunStatus.SUCCEEDED,
             finishedAt: new Date(),
           },
         });

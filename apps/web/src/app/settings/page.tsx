@@ -10,6 +10,10 @@ type OrganizationSettings = {
   autoRespond: boolean;
   requireHumanApproval: boolean;
   maxAgentCostCents: number;
+  maxAutoSendCostCents: number;
+  requireApprovalForLowConfidence: boolean;
+  blockOnPiiDetection: boolean;
+  minCriticCompletenessScore: number;
 };
 
 export default async function SettingsPage({ searchParams }: SettingsPageProps) {

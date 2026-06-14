@@ -101,6 +101,23 @@ export class TicketsController {
     );
   }
 
+  @Get(':id/guardrails')
+  @ApiOperation({ summary: 'List guardrail checks for a ticket' })
+  async getTicketGuardrails(
+    @Param('id') ticketId: string,
+    @Query() query: OrgQueryDto,
+  ) {
+    const { organization } = await this.supportService.assertTicketAccess(
+      ticketId,
+      query.orgId ?? 'org_demo',
+    );
+
+    return this.prisma.agentGuardrailCheck.findMany({
+      where: { orgId: organization.id, ticketId },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+  }
+
   @Get(':id/retrievals')
   @ApiOperation({
     summary: 'List knowledge retrieval traces for a ticket',
