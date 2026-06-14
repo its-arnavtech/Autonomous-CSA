@@ -26,7 +26,7 @@ function mockLlmService(
       : jest
           .fn()
           .mockImplementation(
-            async (request: unknown, validate: (raw: unknown) => unknown) => {
+            (request: unknown, validate: (raw: unknown) => unknown) => {
               const { task } = request as { task: string };
               let rawOutput: unknown;
               if (task === 'ROUTER') {
@@ -54,7 +54,7 @@ function mockLlmService(
                   recommendedAction: 'approve',
                 };
               }
-              return {
+              return Promise.resolve({
                 output: validate(rawOutput),
                 rawText: JSON.stringify(rawOutput),
                 provider: 'openai',
@@ -65,7 +65,7 @@ function mockLlmService(
                   totalTokens: 180,
                   estimatedCostCents: 2,
                 },
-              };
+              });
             },
           ),
   };
@@ -186,7 +186,7 @@ describe('AgentRuntimeService — LLM integration', () => {
       fail: true,
       fallbackEnabled: true,
     });
-    const { service, prisma, resolverAgent, routerAgent } = createService(llm);
+    const { service, prisma, routerAgent } = createService(llm);
 
     const result = await service.runPipeline({
       orgId: 'org_1',

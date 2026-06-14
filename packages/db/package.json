@@ -7,10 +7,13 @@
   "scripts": {
     "db:generate": "prisma generate --schema prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",
+    "db:migrate:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
     "db:seed": "prisma db seed --schema prisma/schema.prisma",
+    "db:validate": "prisma validate --schema prisma/schema.prisma",
     "build": "tsc -p tsconfig.json",
     "lint": "echo \"No lint configured for @agentic-support/db\"",
-    "test": "echo \"No tests configured for @agentic-support/db\""
+    "test": "echo \"No tests configured for @agentic-support/db\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@prisma/client": "^6.19.1"

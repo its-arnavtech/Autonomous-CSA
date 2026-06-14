@@ -30,7 +30,7 @@ export class CreateTicketDto {
   body!: string;
 
   @ApiProperty()
-  @Transform(({ value }) =>
+  @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.toLowerCase() : value,
   )
   @IsEmail()

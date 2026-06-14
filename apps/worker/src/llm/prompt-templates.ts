@@ -4,6 +4,10 @@ import {
   RouterOutput,
 } from '../agent-runtime/agent-runtime.types';
 
+function formatUnknown(value: unknown): string {
+  return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
 // ─── Router ──────────────────────────────────────────────────────────────────
 
 export const ROUTER_SYSTEM_PROMPT = `You are a customer support ticket router. Analyze the incoming ticket and respond with a JSON object only.
@@ -31,13 +35,13 @@ export function validateRouterOutput(raw: unknown): RouterOutput {
   const validCategories = ['billing', 'technical', 'account', 'general'];
 
   if (!validCategories.includes(r.category as string)) {
-    throw new Error(`invalid category: ${r.category}`);
+    throw new Error(`invalid category: ${formatUnknown(r.category)}`);
   }
   if (typeof r.intent !== 'string' || !r.intent) {
     throw new Error('missing intent');
   }
   if (!['low', 'normal', 'high'].includes(r.urgency as string)) {
-    throw new Error(`invalid urgency: ${r.urgency}`);
+    throw new Error(`invalid urgency: ${formatUnknown(r.urgency)}`);
   }
   if (typeof r.confidence !== 'number') {
     throw new Error('missing confidence');
@@ -192,7 +196,7 @@ export function validateCriticOutput(raw: unknown): CriticOutput {
   if (
     !['safe', 'needs_review', 'blocked'].includes(r.safetyVerdict as string)
   ) {
-    throw new Error(`invalid safetyVerdict: ${r.safetyVerdict}`);
+    throw new Error(`invalid safetyVerdict: ${formatUnknown(r.safetyVerdict)}`);
   }
   if (typeof r.completenessScore !== 'number') {
     throw new Error('missing completenessScore');
@@ -205,7 +209,9 @@ export function validateCriticOutput(raw: unknown): CriticOutput {
       r.recommendedAction as string,
     )
   ) {
-    throw new Error(`invalid recommendedAction: ${r.recommendedAction}`);
+    throw new Error(
+      `invalid recommendedAction: ${formatUnknown(r.recommendedAction)}`,
+    );
   }
 
   return {
