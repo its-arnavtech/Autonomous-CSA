@@ -1,0 +1,124 @@
+import { BadRequestException } from '@nestjs/common';
+import { ApprovalsController } from './approvals.controller';
+
+describe('ApprovalsController', () => {
+  function createController() {
+    const prisma = {
+      agentRun: { findFirst: jest.fn() },
+      humanApproval: {
+        create: jest.fn(),
+        update: jest.fn(),
+      },
+      outboundDraft: {
+        update: jest.fn(),
+      },
+      $transaction: jest.fn(),
+    };
+
+    const supportService = {
+      assertTicketAccess: jest.fn(),
+      getApprovalOrThrow: jest.fn(),
+      appendTimelineEvent: jest.fn(),
+    };
+
+    return {
+      prisma,
+      supportService,
+      controller: new ApprovalsController(
+        prisma as never,
+        supportService as never,
+      ),
+    };
+  }
+
+  it('creates a pending approval scaffold', async () => {
+    const { controller, prisma, supportService } = createController();
+    supportService.assertTicketAccess.mockResolvedValue({
+      organization: { id: 'org_1' },
+      ticket: { id: 'ticket_1' },
+    });
+    prisma.humanApproval.create.mockResolvedValue({
+      id: 'approval_1',
+      status: 'PENDING',
+    });
+
+    const approval = await controller.createApproval({
+      orgId: 'org_demo',
+      ticketId: 'ticket_1',
+      proposedResponse: 'Draft response',
+    });
+
+    expect(prisma.humanApproval.create).toHaveBeenCalledWith({
+      data: {
+        orgId: 'org_1',
+        ticketId: 'ticket_1',
+        agentRunId: undefined,
+        status: 'PENDING',
+        proposedResponse: 'Draft response',
+      },
+    });
+    expect(approval.status).toBe('PENDING');
+  });
+
+  it('rejects an unrelated agentRunId during approval creation', async () => {
+    const { controller, prisma, supportService } = createController();
+    supportService.assertTicketAccess.mockResolvedValue({
+      organization: { id: 'org_1' },
+      ticket: { id: 'ticket_1' },
+    });
+    prisma.agentRun.findFirst.mockResolvedValue(null);
+
+    await expect(
+      controller.createApproval({
+        orgId: 'org_demo',
+        ticketId: 'ticket_1',
+        agentRunId: 'run_1',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it.each(['APPROVED', 'REJECTED'] as const)(
+    'updates approval status to %s',
+    async (decision) => {
+      const { controller, prisma, supportService } = createController();
+      supportService.getApprovalOrThrow.mockResolvedValue({
+        organization: { id: 'org_1' },
+        approval: {
+          id: 'approval_1',
+          ticketId: 'ticket_1',
+          agentRunId: 'run_1',
+          outboundDraftId: 'draft_1',
+          proposedResponse: 'Draft body',
+        },
+      });
+      prisma.$transaction.mockImplementation(
+        async (callback: (tx: typeof prisma) => Promise<unknown>) =>
+          callback(prisma),
+      );
+      prisma.humanApproval.update.mockResolvedValue({
+        id: 'approval_1',
+        status: decision,
+      });
+      prisma.outboundDraft.update.mockResolvedValue({
+        id: 'draft_1',
+        status: decision,
+      });
+
+      const approval = await controller.updateApproval('approval_1', {
+        orgId: 'org_demo',
+        status: decision,
+        reviewerNote: 'Reviewed by QA',
+      });
+
+      expect(prisma.humanApproval.update).toHaveBeenCalledWith({
+        where: { id: 'approval_1' },
+        data: {
+          status: decision,
+          reviewerNote: 'Reviewed by QA',
+        },
+      });
+      expect(prisma.outboundDraft.update).toHaveBeenCalled();
+      expect(approval.status).toBe(decision);
+    },
+  );
+});

@@ -25,7 +25,7 @@ async function main() {
         orgId: organization.id,
         subject: 'Sample login issue',
         status: TicketStatus.OPEN,
-        priority: TicketPriority.MEDIUM,
+        priority: TicketPriority.NORMAL,
         customerEmail: 'sample.customer@example.com',
         customerName: 'Sample Customer',
         messages: {
@@ -38,6 +38,14 @@ async function main() {
       },
     });
   }
+
+  await prisma.organizationSettings.upsert({
+    where: { orgId: organization.id },
+    update: {},
+    create: {
+      orgId: organization.id,
+    },
+  });
 }
 
 main()

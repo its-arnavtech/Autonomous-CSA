@@ -1,30 +1,19 @@
-import { BadRequestException, Controller, Get, Param, Query } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { Controller, Get, Param, Query } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { SupportService } from '../support/support.service';
+import { OrgQueryDto } from './tickets.dto';
 
+@ApiTags('tickets')
 @Controller('tickets')
 export class TicketsTimelineController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly supportService: SupportService) {}
 
   @Get(':id/timeline')
-  async getTimeline(@Param('id') ticketId: string, @Query('orgId') orgId: string) {
-    const orgSlug = orgId ?? 'org_demo';
-    const organization = await this.prisma.organization.findUnique({
-      where: { slug: orgSlug },
-    });
-
-    if (!organization) {
-      throw new BadRequestException(`Unknown organization: ${orgSlug}`);
-    }
-
-    const events = await this.prisma.agentEvent.findMany({
-      where: { orgId: organization.id, ticketId },
-      orderBy: [{ sequence: 'asc' }, { createdAt: 'asc' }],
-    });
-
-    return events.map((event) => ({
-      ts: event.createdAt.toISOString(),
-      type: event.type,
-      payload: event.payload,
-    }));
+  @ApiOperation({ summary: 'Get ticket timeline events' })
+  async getTimeline(
+    @Param('id') ticketId: string,
+    @Query() query: OrgQueryDto,
+  ) {
+    return this.supportService.getTimeline(ticketId, query.orgId ?? 'org_demo');
   }
 }

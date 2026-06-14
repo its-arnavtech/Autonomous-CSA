@@ -3,9 +3,12 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const port = process.env.PORT ? Number(process.env.PORT) : 3002;
+  const rawPort = process.env.PORT;
+  const port = rawPort ? parseInt(rawPort, 10) : 3002;
+  if (isNaN(port) || port < 1 || port > 65535) {
+    throw new Error(`Invalid PORT value: "${rawPort}"`);
+  }
   await app.listen(port);
-  // eslint-disable-next-line no-console
   console.log(`Worker listening on http://localhost:${port}`);
 }
-bootstrap();
+void bootstrap();

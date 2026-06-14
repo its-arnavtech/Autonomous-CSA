@@ -8,15 +8,20 @@ datasource db {
 }
 
 model Organization {
-  id        String          @id @default(uuid())
+  id        String               @id @default(uuid())
   name      String
-  slug      String          @unique
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  slug      String               @unique
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
   tickets   Ticket[]
   messages  TicketMessage[]
   agentRuns AgentRun[]
   events    AgentEvent[]
+  settings  OrganizationSettings?
+  approvals HumanApproval[]
+  drafts    OutboundDraft[]
+  knowledgeArticles   KnowledgeArticle[]
+  knowledgeRetrievals KnowledgeRetrieval[]
 }
 
 model Ticket {
@@ -33,22 +38,28 @@ model Ticket {
   messages      TicketMessage[]
   agentRuns     AgentRun[]
   events        AgentEvent[]
+  approvals     HumanApproval[]
+  drafts        OutboundDraft[]
+  retrievals    KnowledgeRetrieval[]
 
   @@index([orgId])
   @@index([orgId, status])
+  @@index([orgId, updatedAt])
 }
 
 model TicketMessage {
   id           String           @id @default(uuid())
   orgId        String
   ticketId     String
-  direction    MessageDirection
+  direction    MessageDirection  @default(INBOUND)
+  status       MessageStatus     @default(RECEIVED)
   body         String
   createdAt    DateTime         @default(now())
   ticket       Ticket           @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   organization Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@index([ticketId])
+  @@index([orgId, ticketId, createdAt])
 }
 
 model AgentRun {
@@ -67,8 +78,63 @@ model AgentRun {
   ticket         Ticket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   organization   Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
   events         AgentEvent[]
+  approvals      HumanApproval[]
+  drafts         OutboundDraft[]
+  steps          AgentStep[]
+  retrievals     KnowledgeRetrieval[]
 
   @@index([ticketId])
+}
+
+model AgentStep {
+  id           String          @id @default(uuid())
+  orgId        String
+  agentRunId   String
+  stepType     AgentStepType
+  status       AgentStepStatus
+  inputJson    Json?
+  outputJson   Json?
+  errorMessage String?
+  startedAt    DateTime        @default(now())
+  finishedAt   DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  agentRun     AgentRun        @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, agentRunId, stepType])
+  @@index([orgId, createdAt])
+}
+
+model KnowledgeArticle {
+  id           String                 @id @default(uuid())
+  orgId        String
+  title        String
+  body         String
+  status       KnowledgeArticleStatus @default(DRAFT)
+  tags         String[]
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  organization Organization           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, status, updatedAt])
+  @@index([orgId, createdAt])
+}
+
+model KnowledgeRetrieval {
+  id           String       @id @default(uuid())
+  orgId        String
+  ticketId     String
+  agentRunId   String?
+  query        String
+  resultCount  Int
+  resultsJson  Json
+  createdAt    DateTime     @default(now())
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  ticket       Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  agentRun     AgentRun?    @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, ticketId, createdAt])
+  @@index([orgId, agentRunId])
 }
 
 model AgentEvent {
@@ -91,18 +157,79 @@ model AgentEvent {
   @@index([orgId, ticketId, sequence])
 }
 
+model OrganizationSettings {
+  id                   String       @id @default(uuid())
+  orgId                String       @unique
+  autoRespond          Boolean      @default(false)
+  requireHumanApproval Boolean      @default(true)
+  maxAgentCostCents    Int          @default(50)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  organization         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+model HumanApproval {
+  id               String         @id @default(uuid())
+  orgId            String
+  ticketId         String
+  agentRunId       String?
+  outboundDraftId  String?
+  status           ApprovalStatus
+  proposedResponse String?
+  reviewerNote     String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  organization     Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  ticket           Ticket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  agentRun         AgentRun?      @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+  outboundDraft    OutboundDraft? @relation(fields: [outboundDraftId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, ticketId, createdAt])
+  @@index([agentRunId])
+  @@index([orgId, outboundDraftId])
+}
+
+model OutboundDraft {
+  id             String       @id @default(uuid())
+  orgId          String
+  ticketId       String
+  agentRunId     String?
+  body           String
+  status         DraftStatus  @default(DRAFT)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  sentAt         DateTime?
+  createdBy      String       @default("agent_stub")
+  approvedBy     String?
+  rejectedReason String?
+  organization   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  ticket         Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  agentRun       AgentRun?    @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+  approvals      HumanApproval[]
+
+  @@index([orgId, ticketId, createdAt])
+  @@index([agentRunId])
+}
+
 enum TicketStatus {
   OPEN
   PENDING
+  WAITING_CUSTOMER
   RESOLVED
-  ESCALATED
+  CLOSED
 }
 
 enum TicketPriority {
   LOW
-  MEDIUM
+  NORMAL
   HIGH
   URGENT
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum MessageDirection {
@@ -110,12 +237,41 @@ enum MessageDirection {
   OUTBOUND
 }
 
+enum MessageStatus {
+  RECEIVED
+  DRAFTED
+  SENT
+}
+
+enum DraftStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  SENT
+}
+
 enum AgentRunStatus {
   QUEUED
   RUNNING
   SUCCEEDED
   FAILED
+  BLOCKED
   CANCELLED
+}
+
+enum AgentStepType {
+  ROUTER
+  RETRIEVER
+  RESOLVER
+  CRITIC
+}
+
+enum AgentStepStatus {
+  STARTED
+  SUCCEEDED
+  FAILED
+  BLOCKED
 }
 
 enum AgentRunTrigger {
@@ -127,7 +283,34 @@ enum AgentRunTrigger {
 enum AgentEventType {
   RUN_QUEUED
   RUN_STARTED
+  ROUTER_STARTED
   ROUTER_DECISION
+  RETRIEVER_STARTED
+  RETRIEVER_RESULTS
+  KNOWLEDGE_USED
+  KNOWLEDGE_NOT_FOUND
+  RESOLVER_STARTED
+  RESOLVER_DRAFTED
+  CRITIC_STARTED
+  CRITIC_REVIEWED
+  CRITIC_BLOCKED
+  DRAFT_CREATED
+  DRAFT_EDITED
+  DRAFT_APPROVED
+  DRAFT_REJECTED
+  DRAFT_AUTO_APPROVED
+  DRAFT_SENT
+  OUTBOUND_MESSAGE_CREATED
+  HUMAN_APPROVAL_CREATED
+  AGENT_STEP_FAILED
+  TICKET_STATUS_CHANGED
+  TICKET_PRIORITY_CHANGED
   RUN_FINISHED
   RUN_FAILED
+}
+
+enum KnowledgeArticleStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
 }
