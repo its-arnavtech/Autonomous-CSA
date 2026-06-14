@@ -6,6 +6,7 @@ import {
   ApprovalStatus,
   DraftStatus,
   GuardrailDecision,
+  GuardrailType,
   Prisma,
   nextEventSequence,
 } from '@agentic-support/db';
@@ -114,7 +115,7 @@ export class SupportProcessor extends WorkerHost {
         // Emit specific detection events
         for (const check of checks) {
           if (
-            check.guardrailType === 'PII_DETECTION' &&
+            check.guardrailType === GuardrailType.PII_DETECTION &&
             check.decision !== GuardrailDecision.ALLOW
           ) {
             await this.appendAgentEvent({
@@ -128,7 +129,7 @@ export class SupportProcessor extends WorkerHost {
               },
             });
           } else if (
-            check.guardrailType === 'SECRET_DETECTION' &&
+            check.guardrailType === GuardrailType.SECRET_DETECTION &&
             check.decision !== GuardrailDecision.ALLOW
           ) {
             await this.appendAgentEvent({
@@ -142,7 +143,7 @@ export class SupportProcessor extends WorkerHost {
               },
             });
           } else if (
-            check.guardrailType === 'COST_LIMIT' &&
+            check.guardrailType === GuardrailType.COST_LIMIT &&
             check.decision !== GuardrailDecision.ALLOW
           ) {
             await this.appendAgentEvent({
@@ -156,7 +157,7 @@ export class SupportProcessor extends WorkerHost {
               },
             });
           } else if (
-            check.guardrailType === 'KNOWLEDGE_GROUNDING' &&
+            check.guardrailType === GuardrailType.KNOWLEDGE_GROUNDING &&
             check.decision !== GuardrailDecision.ALLOW
           ) {
             await this.appendAgentEvent({
