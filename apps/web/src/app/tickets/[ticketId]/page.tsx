@@ -4,6 +4,7 @@ import { ApprovalReviewCard } from './approval-review-card';
 import { AgentStepsPanel } from './agent-steps-panel';
 import { DraftCard } from './draft-card';
 import { DraftComposer } from './draft-composer';
+import { GuardrailsPanel } from './guardrails-panel';
 import { KnowledgeRetrievalPanel } from './knowledge-retrieval-panel';
 import { TicketControls } from './ticket-controls';
 
@@ -85,6 +86,15 @@ type Retrieval = {
   createdAt: string;
 };
 
+type GuardrailCheck = {
+  id: string;
+  guardrailType: string;
+  decision: string;
+  reason?: string | null;
+  metadata?: unknown;
+  createdAt: string;
+};
+
 type TicketPageProps = {
   params: { ticketId: string } | Promise<{ ticketId: string }>;
   searchParams: { orgId?: string } | Promise<{ orgId?: string }>;
@@ -160,19 +170,23 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
   const timelineUrl = `${base}/api/tickets/${encodeURIComponent(ticketId)}/timeline?orgId=${encodeURIComponent(orgId)}`;
   const approvalsUrl = `${base}/api/tickets/${encodeURIComponent(ticketId)}/approvals?orgId=${encodeURIComponent(orgId)}`;
   const retrievalsUrl = `${base}/api/tickets/${encodeURIComponent(ticketId)}/retrievals?orgId=${encodeURIComponent(orgId)}`;
+  const guardrailsUrl = `${base}/api/tickets/${encodeURIComponent(ticketId)}/guardrails?orgId=${encodeURIComponent(orgId)}`;
 
   let detailRes: Response;
   let timelineRes: Response;
   let approvalsRes: Response;
   let retrievalsRes: Response;
+  let guardrailsRes: Response;
 
   try {
-    [detailRes, timelineRes, approvalsRes, retrievalsRes] = await Promise.all([
-      fetch(detailUrl, { cache: 'no-store' }),
-      fetch(timelineUrl, { cache: 'no-store' }),
-      fetch(approvalsUrl, { cache: 'no-store' }),
-      fetch(retrievalsUrl, { cache: 'no-store' }),
-    ]);
+    [detailRes, timelineRes, approvalsRes, retrievalsRes, guardrailsRes] =
+      await Promise.all([
+        fetch(detailUrl, { cache: 'no-store' }),
+        fetch(timelineUrl, { cache: 'no-store' }),
+        fetch(approvalsUrl, { cache: 'no-store' }),
+        fetch(retrievalsUrl, { cache: 'no-store' }),
+        fetch(guardrailsUrl, { cache: 'no-store' }),
+      ]);
   } catch (error) {
     return (
       <ErrorPanel
@@ -183,12 +197,19 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
     );
   }
 
-  if (!detailRes.ok || !timelineRes.ok || !approvalsRes.ok || !retrievalsRes.ok) {
+  if (
+    !detailRes.ok ||
+    !timelineRes.ok ||
+    !approvalsRes.ok ||
+    !retrievalsRes.ok ||
+    !guardrailsRes.ok
+  ) {
     const failures = await Promise.all([
       detailRes.text(),
       timelineRes.text(),
       approvalsRes.text(),
       retrievalsRes.text(),
+      guardrailsRes.text(),
     ]);
 
     return (
@@ -201,6 +222,7 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
             timeline: failures[1],
             approvals: failures[2],
             retrievals: failures[3],
+            guardrails: failures[4],
           },
           null,
           2,
@@ -209,12 +231,14 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
     );
   }
 
-  const [ticket, timeline, approvals, retrievals] = (await Promise.all([
-    detailRes.json(),
-    timelineRes.json(),
-    approvalsRes.json(),
-    retrievalsRes.json(),
-  ])) as [TicketDetail, TimelineEvent[], Approval[], Retrieval[]];
+  const [ticket, timeline, approvals, retrievals, guardrails] =
+    (await Promise.all([
+      detailRes.json(),
+      timelineRes.json(),
+      approvalsRes.json(),
+      retrievalsRes.json(),
+      guardrailsRes.json(),
+    ])) as [TicketDetail, TimelineEvent[], Approval[], Retrieval[], GuardrailCheck[]];
 
   return (
     <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
@@ -397,6 +421,8 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
             retrievals={retrievals}
             steps={ticket.agentSteps}
           />
+
+          <GuardrailsPanel checks={guardrails} />
 
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-3">

@@ -2,6 +2,7 @@ import {
   AgentEventType,
   AgentRunStatus,
   DraftStatus,
+  GuardrailDecision,
 } from '@agentic-support/db';
 import { SupportProcessor } from './support.processor';
 
@@ -28,7 +29,10 @@ type OutboundDraftCreateArgs = {
 };
 
 describe('SupportProcessor', () => {
-  function createProcessor(requireHumanApproval: boolean) {
+  function createProcessor(
+    requireHumanApproval: boolean,
+    guardrailAggregate: GuardrailDecision = GuardrailDecision.ALLOW,
+  ) {
     const prisma = {
       agentRun: { update: jest.fn().mockResolvedValue({}) },
       agentStep: {
@@ -40,14 +44,24 @@ describe('SupportProcessor', () => {
         update: jest.fn().mockResolvedValue({}),
       },
       organizationSettings: {
-        upsert: jest.fn().mockResolvedValue({ requireHumanApproval }),
+        upsert: jest.fn().mockResolvedValue({
+          requireHumanApproval,
+          maxAutoSendCostCents: 25,
+          requireApprovalForLowConfidence: true,
+          blockOnPiiDetection: true,
+          minCriticCompletenessScore: 70,
+        }),
       },
       outboundDraft: {
         create: jest.fn().mockResolvedValue({
           id: 'draft_1',
-          status: requireHumanApproval
-            ? DraftStatus.PENDING_APPROVAL
-            : DraftStatus.APPROVED,
+          status:
+            guardrailAggregate === GuardrailDecision.BLOCK
+              ? DraftStatus.DRAFT
+              : guardrailAggregate === GuardrailDecision.REQUIRE_APPROVAL ||
+                  requireHumanApproval
+                ? DraftStatus.PENDING_APPROVAL
+                : DraftStatus.APPROVED,
         }),
       },
       humanApproval: { create: jest.fn().mockResolvedValue({}) },
@@ -55,10 +69,20 @@ describe('SupportProcessor', () => {
         aggregate: jest.fn().mockResolvedValue({ _max: { sequence: 1 } }),
         create: jest.fn().mockResolvedValue({}),
       },
-      $transaction: jest.fn().mockImplementation(
-        async (callback: (tx: typeof prisma) => Promise<unknown>) =>
-          callback(prisma),
-      ),
+      $transaction: jest
+        .fn()
+        .mockImplementation(
+          async (
+            arg:
+              | ((tx: typeof prisma) => Promise<unknown>)
+              | Array<Promise<unknown>>,
+          ) => {
+            if (typeof arg === 'function') {
+              return arg(prisma);
+            }
+            return Promise.all(arg);
+          },
+        ),
     };
 
     const agentRuntimeService = {
@@ -75,6 +99,7 @@ describe('SupportProcessor', () => {
             'Thanks for reaching out. We are reviewing the payment details you mentioned and will follow up with the next steps shortly.',
           resolutionSummary: 'Prepared a billing response.',
           confidence: 0.94,
+          usedKnowledgeArticleIds: ['article_1'],
         },
         critic: {
           passed: true,
@@ -86,12 +111,21 @@ describe('SupportProcessor', () => {
       }),
     };
 
+    const guardrailService = {
+      runAll: jest.fn().mockResolvedValue({
+        checks: [],
+        aggregate: guardrailAggregate,
+      }),
+    };
+
     return {
       prisma,
       agentRuntimeService,
+      guardrailService,
       processor: new SupportProcessor(
         prisma as never,
         agentRuntimeService as never,
+        guardrailService as never,
       ),
     };
   }
@@ -145,9 +179,6 @@ describe('SupportProcessor', () => {
     );
 
     expect(approvalEventCall).toBeDefined();
-    expect(approvalEventCall?.[0].data.type).toBe(
-      AgentEventType.HUMAN_APPROVAL_CREATED,
-    );
 
     const runUpdateCalls = prisma.agentRun.update.mock
       .calls as AgentRunUpdateArgs[][];
@@ -187,29 +218,11 @@ describe('SupportProcessor', () => {
     ).toBe(true);
   });
 
-  it('blocks the run when the critic rejects the draft', async () => {
-    const { prisma, processor, agentRuntimeService } = createProcessor(true);
-    agentRuntimeService.runPipeline.mockResolvedValue({
-      router: {
-        category: 'technical',
-        intent: 'investigate_bug_report',
-        urgency: 'high',
-        confidence: 0.82,
-        notes: 'technical',
-      },
-      resolver: {
-        draftBody: 'TBD',
-        resolutionSummary: 'Draft needs more detail.',
-        confidence: 0.4,
-      },
-      critic: {
-        passed: false,
-        safetyVerdict: 'needs_review',
-        completenessScore: 0.2,
-        issues: ['Draft is too short'],
-        recommendedAction: 'block',
-      },
-    });
+  it('blocks the run when a guardrail returns BLOCK', async () => {
+    const { prisma, processor } = createProcessor(
+      true,
+      GuardrailDecision.BLOCK,
+    );
 
     await processor.process({
       name: 'ticket.process',
@@ -226,7 +239,6 @@ describe('SupportProcessor', () => {
     const outboundDraftCalls = prisma.outboundDraft.create.mock
       .calls as OutboundDraftCreateArgs[][];
     const blockedDraftCreate = outboundDraftCalls[0]?.[0];
-    expect(blockedDraftCreate?.data.body).toBe('TBD');
     expect(blockedDraftCreate?.data.status).toBe(DraftStatus.DRAFT);
     expect(blockedDraftCreate?.data.approvedBy).toBeNull();
     expect(prisma.humanApproval.create).not.toHaveBeenCalled();
@@ -235,7 +247,7 @@ describe('SupportProcessor', () => {
       .calls as AgentEventCreateArgs[][];
     expect(
       agentEventCalls.some(
-        ([args]) => args.data.type === AgentEventType.CRITIC_BLOCKED,
+        ([args]) => args.data.type === AgentEventType.GUARDRAIL_BLOCKED,
       ),
     ).toBe(true);
 
@@ -243,5 +255,44 @@ describe('SupportProcessor', () => {
       .calls as AgentRunUpdateArgs[][];
     const lastRunUpdate = runUpdateCalls[runUpdateCalls.length - 1]?.[0];
     expect(lastRunUpdate?.data.status).toBe(AgentRunStatus.BLOCKED);
+  });
+
+  it('creates an approval when guardrail returns REQUIRE_APPROVAL', async () => {
+    const { prisma, processor } = createProcessor(
+      false,
+      GuardrailDecision.REQUIRE_APPROVAL,
+    );
+
+    await processor.process({
+      name: 'ticket.process',
+      id: 'job_4',
+      data: {
+        orgId: 'org_1',
+        runId: 'run_1',
+        ticketId: 'ticket_1',
+        subject: 'Low confidence ticket',
+      },
+    } as never);
+
+    const outboundDraftCalls = prisma.outboundDraft.create.mock.calls as Array<
+      Array<{ data: { status: DraftStatus } }>
+    >;
+    const draftCreate = outboundDraftCalls[0]?.[0];
+    expect(draftCreate?.data.status).toBe(DraftStatus.PENDING_APPROVAL);
+    expect(prisma.humanApproval.create).toHaveBeenCalled();
+
+    const agentEventCalls = prisma.agentEvent.create.mock
+      .calls as AgentEventCreateArgs[][];
+    expect(
+      agentEventCalls.some(
+        ([args]) =>
+          args.data.type === AgentEventType.GUARDRAIL_REQUIRES_APPROVAL,
+      ),
+    ).toBe(true);
+
+    const runUpdateCalls = prisma.agentRun.update.mock
+      .calls as AgentRunUpdateArgs[][];
+    const lastRunUpdate = runUpdateCalls[runUpdateCalls.length - 1]?.[0];
+    expect(lastRunUpdate?.data.status).toBe(AgentRunStatus.SUCCEEDED);
   });
 });

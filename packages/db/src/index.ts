@@ -24,3 +24,4 @@ export type {
   KnowledgeSearchResult,
 } from './knowledge-search';
 export { nextEventSequence } from './event-sequence';
+export { GuardrailDecision, GuardrailType } from './guardrail-enums';

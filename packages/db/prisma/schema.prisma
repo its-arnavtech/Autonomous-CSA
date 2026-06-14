@@ -63,25 +63,26 @@ model TicketMessage {
 }
 
 model AgentRun {
-  id             String          @id @default(uuid())
-  orgId          String
-  ticketId       String
-  status         AgentRunStatus
-  trigger        AgentRunTrigger
-  startedAt      DateTime?
-  finishedAt     DateTime?
-  totalCostCents Int             @default(0)
-  errorCode      String?
-  errorMessage   String?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  ticket         Ticket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  organization   Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  events         AgentEvent[]
-  approvals      HumanApproval[]
-  drafts         OutboundDraft[]
-  steps          AgentStep[]
-  retrievals     KnowledgeRetrieval[]
+  id              String                @id @default(uuid())
+  orgId           String
+  ticketId        String
+  status          AgentRunStatus
+  trigger         AgentRunTrigger
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  totalCostCents  Int                   @default(0)
+  errorCode       String?
+  errorMessage    String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  ticket          Ticket                @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  organization    Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  events          AgentEvent[]
+  approvals       HumanApproval[]
+  drafts          OutboundDraft[]
+  steps           AgentStep[]
+  retrievals      KnowledgeRetrieval[]
+  guardrailChecks AgentGuardrailCheck[]
 
   @@index([ticketId])
 }
@@ -158,14 +159,18 @@ model AgentEvent {
 }
 
 model OrganizationSettings {
-  id                   String       @id @default(uuid())
-  orgId                String       @unique
-  autoRespond          Boolean      @default(false)
-  requireHumanApproval Boolean      @default(true)
-  maxAgentCostCents    Int          @default(50)
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
-  organization         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  id                              String       @id @default(uuid())
+  orgId                           String       @unique
+  autoRespond                     Boolean      @default(false)
+  requireHumanApproval            Boolean      @default(true)
+  maxAgentCostCents               Int          @default(50)
+  maxAutoSendCostCents            Int          @default(25)
+  requireApprovalForLowConfidence Boolean      @default(true)
+  blockOnPiiDetection             Boolean      @default(true)
+  minCriticCompletenessScore      Int          @default(70)
+  createdAt                       DateTime     @default(now())
+  updatedAt                       DateTime     @updatedAt
+  organization                    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 }
 
 model HumanApproval {
@@ -206,6 +211,22 @@ model OutboundDraft {
   ticket         Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   agentRun       AgentRun?    @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
   approvals      HumanApproval[]
+
+  @@index([orgId, ticketId, createdAt])
+  @@index([agentRunId])
+}
+
+model AgentGuardrailCheck {
+  id            String            @id @default(uuid())
+  orgId         String
+  ticketId      String
+  agentRunId    String?
+  guardrailType GuardrailType
+  decision      GuardrailDecision
+  reason        String?
+  metadata      Json?
+  createdAt     DateTime          @default(now())
+  agentRun      AgentRun?         @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
 
   @@index([orgId, ticketId, createdAt])
   @@index([agentRunId])
@@ -307,10 +328,33 @@ enum AgentEventType {
   TICKET_PRIORITY_CHANGED
   RUN_FINISHED
   RUN_FAILED
+  GUARDRAIL_STARTED
+  GUARDRAIL_CHECK_PASSED
+  GUARDRAIL_REQUIRES_APPROVAL
+  GUARDRAIL_BLOCKED
+  GUARDRAIL_PII_DETECTED
+  GUARDRAIL_SECRET_DETECTED
+  GUARDRAIL_COST_LIMIT_EXCEEDED
+  GUARDRAIL_KNOWLEDGE_GROUNDING_FAILED
 }
 
 enum KnowledgeArticleStatus {
   DRAFT
   PUBLISHED
   ARCHIVED
+}
+
+enum GuardrailDecision {
+  ALLOW
+  REQUIRE_APPROVAL
+  BLOCK
+}
+
+enum GuardrailType {
+  COST_LIMIT
+  SAFETY_POLICY
+  KNOWLEDGE_GROUNDING
+  PII_DETECTION
+  SECRET_DETECTION
+  AUTO_SEND_POLICY
 }
