@@ -1,6 +1,9 @@
 import { PrismaClient, TicketPriority, TicketStatus } from '@prisma/client';
 
 const prisma = new PrismaClient();
+const DEMO_USER_EMAIL = 'demo.owner@example.com';
+const DEMO_USER_PASSWORD_HASH =
+  '$argon2id$v=19$m=19456,t=2,p=1$n3CJohVwONdwvc/nvNEahw$2Q8TahhCchN9SJmPTxgJVtOG2CCBseyPKCjkpk29bQM';
 
 async function main() {
   const organization = await prisma.organization.upsert({
@@ -9,6 +12,36 @@ async function main() {
     create: {
       slug: 'org_demo',
       name: 'Demo Organization',
+    },
+  });
+
+  const demoUser = await prisma.user.upsert({
+    where: { normalizedEmail: DEMO_USER_EMAIL },
+    update: {
+      email: DEMO_USER_EMAIL,
+      displayName: 'Demo Owner',
+      isActive: true,
+    },
+    create: {
+      email: DEMO_USER_EMAIL,
+      normalizedEmail: DEMO_USER_EMAIL,
+      passwordHash: DEMO_USER_PASSWORD_HASH,
+      displayName: 'Demo Owner',
+    },
+  });
+
+  await prisma.organizationMembership.upsert({
+    where: {
+      userId_organizationId: {
+        userId: demoUser.id,
+        organizationId: organization.id,
+      },
+    },
+    update: { role: 'OWNER' },
+    create: {
+      userId: demoUser.id,
+      organizationId: organization.id,
+      role: 'OWNER',
     },
   });
 

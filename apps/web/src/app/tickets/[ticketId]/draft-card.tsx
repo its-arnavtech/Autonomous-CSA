@@ -14,7 +14,6 @@ type DraftCardProps = {
     rejectedReason?: string | null;
     approvals?: Array<{ id: string; status: string }>;
   };
-  orgId: string;
 };
 
 function draftTone(status: string) {
@@ -32,7 +31,7 @@ function draftTone(status: string) {
   }
 }
 
-export function DraftCard({ draft, orgId }: DraftCardProps) {
+export function DraftCard({ draft }: DraftCardProps) {
   const router = useRouter();
   const [body, setBody] = useState(draft.body);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +48,7 @@ export function DraftCard({ draft, orgId }: DraftCardProps) {
         const res = await fetch(`/api/drafts/${encodeURIComponent(draft.id)}`, {
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ orgId, body }),
+          body: JSON.stringify({ body }),
         });
 
         if (!res.ok) {
@@ -72,7 +71,7 @@ export function DraftCard({ draft, orgId }: DraftCardProps) {
         const res = await fetch(`/api/drafts/${encodeURIComponent(draft.id)}/send`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ orgId }),
+          body: JSON.stringify({}),
         });
 
         if (!res.ok) {

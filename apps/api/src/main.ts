@@ -1,10 +1,32 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
+
+function parseAllowedOrigins() {
+  const raw = process.env.CORS_ALLOWED_ORIGINS?.trim();
+
+  if (!raw) {
+    return process.env.NODE_ENV === 'production'
+      ? []
+      : ['http://localhost:3000'];
+  }
+
+  return raw
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.use(helmet());
+  app.enableCors({
+    origin: parseAllowedOrigins(),
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['content-type', 'authorization', 'x-organization-id'],
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -13,15 +35,22 @@ async function bootstrap() {
     }),
   );
 
-  const config = new DocumentBuilder()
-    .setTitle('Agentic Support API')
-    .setDescription('REST API for the Agentic AI Customer Support Platform')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
+  const swaggerEnabled =
+    process.env.SWAGGER_ENABLED === 'true' ||
+    (process.env.SWAGGER_ENABLED == null &&
+      process.env.NODE_ENV !== 'production');
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, document);
+  if (swaggerEnabled) {
+    const config = new DocumentBuilder()
+      .setTitle('Agentic Support API')
+      .setDescription('REST API for the Agentic AI Customer Support Platform')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
+
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('docs', app, document);
+  }
 
   const rawPort = process.env.PORT;
   const port = rawPort ? parseInt(rawPort, 10) : 3001;

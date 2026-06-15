@@ -67,7 +67,7 @@ describe('SupportService', () => {
       maxAgentCostCents: 50,
     });
 
-    const settings = await service.getOrCreateOrganizationSettings('org_demo');
+    const settings = await service.getOrCreateOrganizationSettings('org_1');
 
     expect(prisma.organizationSettings.upsert).toHaveBeenCalledWith({
       where: { orgId: 'org_1' },
@@ -105,7 +105,7 @@ describe('SupportService', () => {
 
     await service.updateTicketStatus(
       'ticket_1',
-      'org_demo',
+      'org_1',
       TicketStatus.CLOSED,
     );
 
@@ -148,8 +148,9 @@ describe('SupportService', () => {
 
     const draft = await service.createManualDraft(
       'ticket_1',
-      'org_demo',
+      'org_1',
       'Manual draft',
+      'user_1',
     );
 
     expect(tx.outboundDraft.create).toHaveBeenCalledWith({
@@ -158,7 +159,9 @@ describe('SupportService', () => {
         ticketId: 'ticket_1',
         body: 'Manual draft',
         status: DraftStatus.DRAFT,
-        createdBy: 'human_stub',
+        createdBy: 'user:user_1',
+        createdByType: 'USER',
+        createdByUserId: 'user_1',
       },
     });
     expect(tx.agentEvent.create).toHaveBeenCalledWith({
@@ -168,7 +171,12 @@ describe('SupportService', () => {
         runId: undefined,
         type: AgentEventType.DRAFT_CREATED,
         sequence: 5,
-        payload: { draftId: 'draft_1', status: DraftStatus.DRAFT },
+        payload: {
+          draftId: 'draft_1',
+          status: DraftStatus.DRAFT,
+          actorType: 'USER',
+          actorUserId: 'user_1',
+        },
       },
     });
     expect(draft.id).toBe('draft_1');
@@ -283,7 +291,7 @@ describe('SupportService', () => {
       async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
     );
 
-    const result = await service.sendDraft('draft_1', 'org_demo');
+    const result = await service.sendDraft('draft_1', 'org_1', 'user_1');
 
     expect(tx.ticketMessage.create).toHaveBeenCalledWith({
       data: {
@@ -317,7 +325,7 @@ describe('SupportService', () => {
     });
 
     await expect(
-      service.sendDraft('draft_1', 'org_demo'),
+      service.sendDraft('draft_1', 'org_1', 'user_1'),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
@@ -395,7 +403,7 @@ describe('SupportService', () => {
       { id: 'retrieval_1' },
     ]);
 
-    const retrievals = await service.getRetrievals('ticket_1', 'org_demo');
+    const retrievals = await service.getRetrievals('ticket_1', 'org_1');
 
     expect(prisma.knowledgeRetrieval.findMany).toHaveBeenCalledWith({
       where: {

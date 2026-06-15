@@ -20,8 +20,57 @@ model Organization {
   settings  OrganizationSettings?
   approvals HumanApproval[]
   drafts    OutboundDraft[]
+  memberships       OrganizationMembership[]
   knowledgeArticles   KnowledgeArticle[]
   knowledgeRetrievals KnowledgeRetrieval[]
+}
+
+model User {
+  id              String                   @id @default(uuid())
+  email           String                   @unique
+  normalizedEmail String                   @unique
+  passwordHash    String
+  displayName     String?
+  isActive        Boolean                  @default(true)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  memberships     OrganizationMembership[]
+  refreshSessions RefreshSession[]
+  reviewedApprovals HumanApproval[] @relation("HumanApprovalReviewedByUser")
+  createdDrafts     OutboundDraft[] @relation("OutboundDraftCreatedByUser")
+  approvedDrafts    OutboundDraft[] @relation("OutboundDraftApprovedByUser")
+  sentDrafts        OutboundDraft[] @relation("OutboundDraftSentByUser")
+}
+
+model OrganizationMembership {
+  id             String           @id @default(uuid())
+  userId         String
+  organizationId String
+  role           OrganizationRole
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@index([userId])
+}
+
+model RefreshSession {
+  id         String   @id @default(uuid())
+  userId     String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime?
+  userAgent  String?
+  ipAddress  String?
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Ticket {
@@ -184,6 +233,7 @@ model HumanApproval {
   ticketId         String
   agentRunId       String?
   outboundDraftId  String?
+  reviewedByUserId String?
   status           ApprovalStatus
   proposedResponse String?
   reviewerNote     String?
@@ -193,10 +243,12 @@ model HumanApproval {
   ticket           Ticket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   agentRun         AgentRun?      @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
   outboundDraft    OutboundDraft? @relation(fields: [outboundDraftId], references: [id], onDelete: SetNull)
+  reviewedByUser   User?          @relation("HumanApprovalReviewedByUser", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
 
   @@index([orgId, ticketId, createdAt])
   @@index([agentRunId])
   @@index([orgId, outboundDraftId])
+  @@index([reviewedByUserId])
 }
 
 model OutboundDraft {
@@ -211,14 +263,27 @@ model OutboundDraft {
   sentAt         DateTime?
   createdBy      String       @default("agent_stub")
   approvedBy     String?
+  sentBy         String?
+  createdByType  ActorType    @default(AGENT)
+  createdByUserId String?
+  approvedByType ActorType?
+  approvedByUserId String?
+  sentByType     ActorType?
+  sentByUserId   String?
   rejectedReason String?
   organization   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   ticket         Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   agentRun       AgentRun?    @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
   approvals      HumanApproval[]
+  createdByUser  User?        @relation("OutboundDraftCreatedByUser", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  approvedByUser User?        @relation("OutboundDraftApprovedByUser", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  sentByUser     User?        @relation("OutboundDraftSentByUser", fields: [sentByUserId], references: [id], onDelete: SetNull)
 
   @@index([orgId, ticketId, createdAt])
   @@index([agentRunId])
+  @@index([createdByUserId])
+  @@index([approvedByUserId])
+  @@index([sentByUserId])
 }
 
 model AgentGuardrailCheck {
@@ -367,4 +432,17 @@ enum GuardrailType {
   PII_DETECTION
   SECRET_DETECTION
   AUTO_SEND_POLICY
+}
+
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  AGENT
+  VIEWER
+}
+
+enum ActorType {
+  USER
+  AGENT
+  SYSTEM
 }

@@ -1,5 +1,7 @@
 import Link from 'next/link';
-import { headers } from 'next/headers';
+import { AppShell } from '../../_auth/app-shell';
+import { OrganizationSelection } from '../../_auth/organization-selection';
+import { requireSessionForPage } from '../../_auth/server-auth';
 import { ApprovalReviewCard } from './approval-review-card';
 import { AgentStepsPanel } from './agent-steps-panel';
 import { DraftCard } from './draft-card';
@@ -97,7 +99,6 @@ type GuardrailCheck = {
 
 type TicketPageProps = {
   params: { ticketId: string } | Promise<{ ticketId: string }>;
-  searchParams: { orgId?: string } | Promise<{ orgId?: string }>;
 };
 
 function badgeTone(kind: 'status' | 'priority', value: string) {
@@ -129,17 +130,17 @@ function badgeTone(kind: 'status' | 'priority', value: string) {
 
 function ErrorPanel({
   ticketId,
-  orgId,
+  organizationLabel,
   details,
 }: {
   ticketId: string;
-  orgId: string;
+  organizationLabel: string;
   details: string;
 }) {
   return (
     <main className="mx-auto max-w-6xl space-y-4 px-6 py-8">
       <div>
-        <p className="text-sm text-slate-500">Org: {orgId}</p>
+        <p className="text-sm text-slate-500">Org: {organizationLabel}</p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">
           Ticket Detail
         </h1>
@@ -156,21 +157,27 @@ function ErrorPanel({
   );
 }
 
-export default async function TicketPage({ params, searchParams }: TicketPageProps) {
-  const resolvedParams = await params;
-  const resolvedSearchParams = await searchParams;
-  const ticketId = resolvedParams.ticketId;
-  const orgId = resolvedSearchParams.orgId ?? 'org_demo';
+export default async function TicketPage({ params }: TicketPageProps) {
+  const context = await requireSessionForPage();
 
-  const h = await headers();
-  const host = h.get('host');
-  const proto = h.get('x-forwarded-proto') ?? 'http';
-  const base = `${proto}://${host}`;
-  const detailUrl = `${base}/api/tickets/${encodeURIComponent(ticketId)}?orgId=${encodeURIComponent(orgId)}`;
-  const timelineUrl = `${base}/api/tickets/${encodeURIComponent(ticketId)}/timeline?orgId=${encodeURIComponent(orgId)}`;
-  const approvalsUrl = `${base}/api/tickets/${encodeURIComponent(ticketId)}/approvals?orgId=${encodeURIComponent(orgId)}`;
-  const retrievalsUrl = `${base}/api/tickets/${encodeURIComponent(ticketId)}/retrievals?orgId=${encodeURIComponent(orgId)}`;
-  const guardrailsUrl = `${base}/api/tickets/${encodeURIComponent(ticketId)}/guardrails?orgId=${encodeURIComponent(orgId)}`;
+  if (!context.activeMembership) {
+    return (
+      <AppShell
+        session={context.session}
+        activeMembership={context.activeMembership}
+      >
+        <OrganizationSelection session={context.session} />
+      </AppShell>
+    );
+  }
+
+  const resolvedParams = await params;
+  const ticketId = resolvedParams.ticketId;
+  const detailUrl = `${context.baseUrl}/api/tickets/${encodeURIComponent(ticketId)}`;
+  const timelineUrl = `${context.baseUrl}/api/tickets/${encodeURIComponent(ticketId)}/timeline`;
+  const approvalsUrl = `${context.baseUrl}/api/tickets/${encodeURIComponent(ticketId)}/approvals`;
+  const retrievalsUrl = `${context.baseUrl}/api/tickets/${encodeURIComponent(ticketId)}/retrievals`;
+  const guardrailsUrl = `${context.baseUrl}/api/tickets/${encodeURIComponent(ticketId)}/guardrails`;
 
   let detailRes: Response;
   let timelineRes: Response;
@@ -181,19 +188,21 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
   try {
     [detailRes, timelineRes, approvalsRes, retrievalsRes, guardrailsRes] =
       await Promise.all([
-        fetch(detailUrl, { cache: 'no-store' }),
-        fetch(timelineUrl, { cache: 'no-store' }),
-        fetch(approvalsUrl, { cache: 'no-store' }),
-        fetch(retrievalsUrl, { cache: 'no-store' }),
-        fetch(guardrailsUrl, { cache: 'no-store' }),
+        fetch(detailUrl, { cache: 'no-store', headers: { cookie: context.cookieHeader } }),
+        fetch(timelineUrl, { cache: 'no-store', headers: { cookie: context.cookieHeader } }),
+        fetch(approvalsUrl, { cache: 'no-store', headers: { cookie: context.cookieHeader } }),
+        fetch(retrievalsUrl, { cache: 'no-store', headers: { cookie: context.cookieHeader } }),
+        fetch(guardrailsUrl, { cache: 'no-store', headers: { cookie: context.cookieHeader } }),
       ]);
   } catch (error) {
     return (
-      <ErrorPanel
-        ticketId={ticketId}
-        orgId={orgId}
-        details={error instanceof Error ? error.message : String(error)}
-      />
+      <AppShell session={context.session} activeMembership={context.activeMembership}>
+        <ErrorPanel
+          ticketId={ticketId}
+          organizationLabel={context.activeMembership.organizationName}
+          details={error instanceof Error ? error.message : String(error)}
+        />
+      </AppShell>
     );
   }
 
@@ -213,21 +222,23 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
     ]);
 
     return (
-      <ErrorPanel
-        ticketId={ticketId}
-        orgId={orgId}
-        details={JSON.stringify(
-          {
-            detail: failures[0],
-            timeline: failures[1],
-            approvals: failures[2],
-            retrievals: failures[3],
-            guardrails: failures[4],
-          },
-          null,
-          2,
-        )}
-      />
+      <AppShell session={context.session} activeMembership={context.activeMembership}>
+        <ErrorPanel
+          ticketId={ticketId}
+          organizationLabel={context.activeMembership.organizationName}
+          details={JSON.stringify(
+            {
+              detail: failures[0],
+              timeline: failures[1],
+              approvals: failures[2],
+              retrievals: failures[3],
+              guardrails: failures[4],
+            },
+            null,
+            2,
+          )}
+        />
+      </AppShell>
     );
   }
 
@@ -240,32 +251,34 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
       guardrailsRes.json(),
     ])) as [TicketDetail, TimelineEvent[], Approval[], Retrieval[], GuardrailCheck[]];
 
-  return (
+  const content = (
     <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-4">
             <Link
-              href={`/tickets?orgId=${encodeURIComponent(orgId)}`}
+              href="/tickets"
               className="text-sm font-medium text-slate-500 underline underline-offset-4"
             >
               Back to inbox
             </Link>
             <Link
-              href={`/settings?orgId=${encodeURIComponent(orgId)}`}
+              href="/settings"
               className="text-sm font-medium text-slate-500 underline underline-offset-4"
             >
               Settings
             </Link>
             <Link
-              href={`/knowledge?orgId=${encodeURIComponent(orgId)}`}
+              href="/knowledge"
               className="text-sm font-medium text-slate-500 underline underline-offset-4"
             >
               Knowledge
             </Link>
           </div>
           <div>
-            <p className="text-sm text-slate-500">Org: {orgId}</p>
+            <p className="text-sm text-slate-500">
+              Org: {context.activeMembership.organizationName}
+            </p>
             <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">
               {ticket.subject}
             </h1>
@@ -433,12 +446,12 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
                 <p className="text-sm text-slate-500">No drafts created yet.</p>
               ) : (
                 ticket.drafts.map((draft) => (
-                  <DraftCard key={draft.id} draft={draft} orgId={orgId} />
+                  <DraftCard key={draft.id} draft={draft} />
                 ))
               )}
             </div>
             <div className="mt-4">
-              <DraftComposer orgId={orgId} ticketId={ticket.id} />
+              <DraftComposer ticketId={ticket.id} />
             </div>
           </div>
 
@@ -449,11 +462,7 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
                 <p className="text-sm text-slate-500">No approvals created yet.</p>
               ) : (
                 approvals.map((approval) => (
-                  <ApprovalReviewCard
-                    key={approval.id}
-                    approval={approval}
-                    orgId={orgId}
-                  />
+                  <ApprovalReviewCard key={approval.id} approval={approval} />
                 ))
               )}
             </div>
@@ -461,12 +470,17 @@ export default async function TicketPage({ params, searchParams }: TicketPagePro
 
           <TicketControls
             ticketId={ticket.id}
-            orgId={orgId}
             status={ticket.status as 'OPEN' | 'PENDING' | 'WAITING_CUSTOMER' | 'RESOLVED' | 'CLOSED'}
             priority={ticket.priority as 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'}
           />
         </div>
       </section>
     </main>
+  );
+
+  return (
+    <AppShell session={context.session} activeMembership={context.activeMembership}>
+      {content}
+    </AppShell>
   );
 }

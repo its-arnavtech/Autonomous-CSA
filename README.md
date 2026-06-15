@@ -11,6 +11,25 @@ A web app where a “company” can connect an inbox (start with a built-in inbo
 - Hardened server-side fetching and error handling
 - Fixed App Router layout requirements and global styles
 
+## Authentication
+
+Phase 8 adds first-party authentication, organization memberships, refresh-token rotation, tenant-aware API guards, and role-based authorization. The browser now talks to Next.js route handlers, which store access and refresh tokens in HttpOnly cookies (`au_access_token`, `au_refresh_token`) plus the selected tenant cookie (`au_organization_id`) and forward a verified `X-Organization-Id` header to the Nest API.
+
+For local development, seed data now creates a demo owner account:
+
+- Email: `demo.owner@example.com`
+- Password: `DemoPassword123!`
+
+Primary browser entry points:
+
+- `/login`
+- `/register`
+- `/tickets`
+- `/knowledge`
+- `/settings`
+
+See [docs/AUTH.md](/C:/Autonomous-CSA/docs/AUTH.md) for the request flow, cookie/header contract, RBAC behavior, and bootstrap details. See [docs/PHASE_8_AUTH_TENANCY.md](/C:/Autonomous-CSA/docs/PHASE_8_AUTH_TENANCY.md) for the full Phase 8 closeout report.
+
 ## CI/CD
 
 GitHub Actions now cover quality checks, Prisma migration validation, security scanning, Docker build readiness, CodeQL, and Dependabot hygiene. See [docs/CI_CD.md](/C:/Autonomous-CSA/docs/CI_CD.md) for the workflow breakdown, local equivalent commands, and failure handling guidance.

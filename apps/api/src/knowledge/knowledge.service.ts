@@ -10,7 +10,6 @@ import {
   rankKnowledgeArticles,
 } from '@agentic-support/db';
 import { PrismaService } from '../prisma/prisma.service';
-import { SupportService } from '../support/support.service';
 import {
   CreateKnowledgeArticleDto,
   ListKnowledgeArticlesQueryDto,
@@ -20,19 +19,12 @@ import {
 
 @Injectable()
 export class KnowledgeService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly supportService: SupportService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async createArticle(dto: CreateKnowledgeArticleDto) {
-    const organization = await this.supportService.resolveOrganization(
-      dto.orgId,
-    );
-
+  async createArticle(dto: CreateKnowledgeArticleDto, orgId: string) {
     return this.prisma.knowledgeArticle.create({
       data: {
-        orgId: organization.id,
+        orgId,
         title: dto.title.trim(),
         body: dto.body.trim(),
         tags: this.normalizeTags(dto.tags),
@@ -41,10 +33,7 @@ export class KnowledgeService {
     });
   }
 
-  async listArticles(query: ListKnowledgeArticlesQueryDto) {
-    const organization = await this.supportService.resolveOrganization(
-      query.orgId ?? 'org_demo',
-    );
+  async listArticles(query: ListKnowledgeArticlesQueryDto, orgId: string) {
     const q = query.q?.trim();
     const tokens = q
       ? q
@@ -54,7 +43,7 @@ export class KnowledgeService {
       : [];
 
     const where: Prisma.KnowledgeArticleWhereInput = {
-      orgId: organization.id,
+      orgId,
       ...(query.status ? { status: query.status } : {}),
       ...(tokens.length > 0
         ? {
@@ -73,10 +62,9 @@ export class KnowledgeService {
     });
   }
 
-  async getArticle(articleId: string, orgSlug = 'org_demo') {
-    const organization = await this.supportService.resolveOrganization(orgSlug);
+  async getArticle(articleId: string, orgId: string) {
     const article = await this.prisma.knowledgeArticle.findFirst({
-      where: { id: articleId, orgId: organization.id },
+      where: { id: articleId, orgId },
     });
 
     if (!article) {
@@ -86,8 +74,12 @@ export class KnowledgeService {
     return article;
   }
 
-  async updateArticle(articleId: string, dto: UpdateKnowledgeArticleDto) {
-    const article = await this.getArticle(articleId, dto.orgId);
+  async updateArticle(
+    articleId: string,
+    dto: UpdateKnowledgeArticleDto,
+    orgId: string,
+  ) {
+    const article = await this.getArticle(articleId, orgId);
     const data: Prisma.KnowledgeArticleUpdateInput = {};
 
     if (dto.title !== undefined) {
@@ -116,8 +108,8 @@ export class KnowledgeService {
     });
   }
 
-  async archiveArticle(articleId: string, orgSlug = 'org_demo') {
-    const article = await this.getArticle(articleId, orgSlug);
+  async archiveArticle(articleId: string, orgId: string) {
+    const article = await this.getArticle(articleId, orgId);
 
     return this.prisma.knowledgeArticle.update({
       where: { id: article.id },
@@ -125,10 +117,7 @@ export class KnowledgeService {
     });
   }
 
-  async search(dto: SearchKnowledgeDto) {
-    const organization = await this.supportService.resolveOrganization(
-      dto.orgId,
-    );
+  async search(dto: SearchKnowledgeDto, orgId: string) {
     const query = buildKnowledgeSearchQuery([dto.query]);
     if (!query) {
       throw new BadRequestException(
@@ -138,7 +127,7 @@ export class KnowledgeService {
 
     const articles = await this.prisma.knowledgeArticle.findMany({
       where: {
-        orgId: organization.id,
+        orgId,
         status: KnowledgeArticleStatus.PUBLISHED,
       },
       orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],

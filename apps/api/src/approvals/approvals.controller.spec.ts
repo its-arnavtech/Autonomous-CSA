@@ -34,7 +34,6 @@ describe('ApprovalsController', () => {
   it('creates a pending approval scaffold', async () => {
     const { controller, prisma, supportService } = createController();
     supportService.assertTicketAccess.mockResolvedValue({
-      organization: { id: 'org_1' },
       ticket: { id: 'ticket_1' },
     });
     prisma.humanApproval.create.mockResolvedValue({
@@ -42,11 +41,15 @@ describe('ApprovalsController', () => {
       status: 'PENDING',
     });
 
-    const approval = await controller.createApproval({
-      orgId: 'org_demo',
-      ticketId: 'ticket_1',
-      proposedResponse: 'Draft response',
-    });
+    const approval = await controller.createApproval(
+      {
+        ticketId: 'ticket_1',
+        proposedResponse: 'Draft response',
+      },
+      {
+        organizationId: 'org_1',
+      } as never,
+    );
 
     expect(prisma.humanApproval.create).toHaveBeenCalledWith({
       data: {
@@ -63,17 +66,20 @@ describe('ApprovalsController', () => {
   it('rejects an unrelated agentRunId during approval creation', async () => {
     const { controller, prisma, supportService } = createController();
     supportService.assertTicketAccess.mockResolvedValue({
-      organization: { id: 'org_1' },
       ticket: { id: 'ticket_1' },
     });
     prisma.agentRun.findFirst.mockResolvedValue(null);
 
     await expect(
-      controller.createApproval({
-        orgId: 'org_demo',
-        ticketId: 'ticket_1',
-        agentRunId: 'run_1',
-      }),
+      controller.createApproval(
+        {
+          ticketId: 'ticket_1',
+          agentRunId: 'run_1',
+        },
+        {
+          organizationId: 'org_1',
+        } as never,
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
@@ -82,7 +88,6 @@ describe('ApprovalsController', () => {
     async (decision) => {
       const { controller, prisma, supportService } = createController();
       supportService.getApprovalOrThrow.mockResolvedValue({
-        organization: { id: 'org_1' },
         approval: {
           id: 'approval_1',
           ticketId: 'ticket_1',
@@ -104,17 +109,26 @@ describe('ApprovalsController', () => {
         status: decision,
       });
 
-      const approval = await controller.updateApproval('approval_1', {
-        orgId: 'org_demo',
-        status: decision,
-        reviewerNote: 'Reviewed by QA',
-      });
+      const approval = await controller.updateApproval(
+        'approval_1',
+        {
+          status: decision,
+          reviewerNote: 'Reviewed by QA',
+        },
+        {
+          organizationId: 'org_1',
+        } as never,
+        {
+          userId: 'user_1',
+        } as never,
+      );
 
       expect(prisma.humanApproval.update).toHaveBeenCalledWith({
         where: { id: 'approval_1' },
         data: {
           status: decision,
           reviewerNote: 'Reviewed by QA',
+          reviewedByUserId: 'user_1',
         },
       });
       expect(prisma.outboundDraft.update).toHaveBeenCalled();

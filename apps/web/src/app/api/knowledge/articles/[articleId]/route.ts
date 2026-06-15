@@ -1,47 +1,39 @@
+import { NextRequest } from 'next/server';
 import { getApiBaseUrl, proxyJsonRequest } from '../../../_utils/proxy';
 
 type RouteContext = {
-  params:
-    | { articleId: string }
-    | Promise<{ articleId: string }>;
+  params: { articleId: string } | Promise<{ articleId: string }>;
 };
 
-export async function GET(req: Request, { params }: RouteContext) {
+export async function GET(req: NextRequest, { params }: RouteContext) {
   const { articleId } = await params;
-  const url = new URL(req.url);
-  const orgId = url.searchParams.get('orgId') ?? 'org_demo';
-  const upstreamUrl = `${getApiBaseUrl()}/knowledge/articles/${encodeURIComponent(articleId)}?orgId=${encodeURIComponent(orgId)}`;
 
   return proxyJsonRequest({
     req,
     method: 'GET',
-    upstreamUrl,
+    upstreamUrl: `${getApiBaseUrl()}/knowledge/articles/${encodeURIComponent(articleId)}`,
     errorContext: 'Failed to load knowledge article from API',
   });
 }
 
-export async function PATCH(req: Request, { params }: RouteContext) {
+export async function PATCH(req: NextRequest, { params }: RouteContext) {
   const { articleId } = await params;
-  const upstreamUrl = `${getApiBaseUrl()}/knowledge/articles/${encodeURIComponent(articleId)}`;
 
   return proxyJsonRequest({
     req,
     method: 'PATCH',
-    upstreamUrl,
+    upstreamUrl: `${getApiBaseUrl()}/knowledge/articles/${encodeURIComponent(articleId)}`,
     errorContext: 'Failed to update knowledge article in API',
   });
 }
 
-export async function DELETE(req: Request, { params }: RouteContext) {
+export async function DELETE(req: NextRequest, { params }: RouteContext) {
   const { articleId } = await params;
-  const url = new URL(req.url);
-  const orgId = url.searchParams.get('orgId') ?? 'org_demo';
-  const upstreamUrl = `${getApiBaseUrl()}/knowledge/articles/${encodeURIComponent(articleId)}?orgId=${encodeURIComponent(orgId)}`;
 
   return proxyJsonRequest({
     req,
     method: 'DELETE',
-    upstreamUrl,
-    errorContext: 'Failed to archive knowledge article in API',
+    upstreamUrl: `${getApiBaseUrl()}/knowledge/articles/${encodeURIComponent(articleId)}`,
+    errorContext: 'Failed to archive knowledge article',
   });
 }

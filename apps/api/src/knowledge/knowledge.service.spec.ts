@@ -13,32 +13,25 @@ describe('KnowledgeService', () => {
       },
     };
 
-    const supportService = {
-      resolveOrganization: jest.fn(),
-    };
-
     return {
       prisma,
-      supportService,
-      service: new KnowledgeService(prisma as never, supportService as never),
+      service: new KnowledgeService(prisma as never),
     };
   }
 
-  it('creates a knowledge article for the resolved org', async () => {
-    const { prisma, service, supportService } = createService();
-    supportService.resolveOrganization.mockResolvedValue({
-      id: 'org_1',
-      slug: 'org_demo',
-    });
+  it('creates a knowledge article for the provided org', async () => {
+    const { prisma, service } = createService();
     prisma.knowledgeArticle.create.mockResolvedValue({ id: 'article_1' });
 
-    await service.createArticle({
-      orgId: 'org_demo',
-      title: ' Duplicate invoice charge policy ',
-      body: ' Billing workflow ',
-      tags: ['Billing', 'invoice', 'billing'],
-      status: KnowledgeArticleStatus.PUBLISHED,
-    });
+    await service.createArticle(
+      {
+        title: ' Duplicate invoice charge policy ',
+        body: ' Billing workflow ',
+        tags: ['Billing', 'invoice', 'billing'],
+        status: KnowledgeArticleStatus.PUBLISHED,
+      },
+      'org_1',
+    );
 
     expect(prisma.knowledgeArticle.create).toHaveBeenCalledWith({
       data: {
@@ -52,14 +45,10 @@ describe('KnowledgeService', () => {
   });
 
   it('lists only org-scoped articles', async () => {
-    const { prisma, service, supportService } = createService();
-    supportService.resolveOrganization.mockResolvedValue({
-      id: 'org_1',
-      slug: 'org_demo',
-    });
+    const { prisma, service } = createService();
     prisma.knowledgeArticle.findMany.mockResolvedValue([]);
 
-    await service.listArticles({ orgId: 'org_demo' });
+    await service.listArticles({}, 'org_1');
 
     expect(prisma.knowledgeArticle.findMany).toHaveBeenCalledWith({
       where: { orgId: 'org_1' },
@@ -68,11 +57,7 @@ describe('KnowledgeService', () => {
   });
 
   it('archives an article instead of hard deleting it', async () => {
-    const { prisma, service, supportService } = createService();
-    supportService.resolveOrganization.mockResolvedValue({
-      id: 'org_1',
-      slug: 'org_demo',
-    });
+    const { prisma, service } = createService();
     prisma.knowledgeArticle.findFirst.mockResolvedValue({
       id: 'article_1',
       orgId: 'org_1',
@@ -82,7 +67,7 @@ describe('KnowledgeService', () => {
       status: KnowledgeArticleStatus.ARCHIVED,
     });
 
-    const article = await service.archiveArticle('article_1', 'org_demo');
+    const article = await service.archiveArticle('article_1', 'org_1');
 
     expect(prisma.knowledgeArticle.update).toHaveBeenCalledWith({
       where: { id: 'article_1' },
@@ -92,11 +77,7 @@ describe('KnowledgeService', () => {
   });
 
   it('search returns only published articles and prefers title/tag matches', async () => {
-    const { prisma, service, supportService } = createService();
-    supportService.resolveOrganization.mockResolvedValue({
-      id: 'org_1',
-      slug: 'org_demo',
-    });
+    const { prisma, service } = createService();
     prisma.knowledgeArticle.findMany.mockResolvedValue([
       {
         id: 'article_title',
@@ -114,11 +95,13 @@ describe('KnowledgeService', () => {
       },
     ]);
 
-    const results = await service.search({
-      orgId: 'org_demo',
-      query: 'duplicate invoice billing charge',
-      limit: 5,
-    });
+    const results = await service.search(
+      {
+        query: 'duplicate invoice billing charge',
+        limit: 5,
+      },
+      'org_1',
+    );
 
     expect(prisma.knowledgeArticle.findMany).toHaveBeenCalledWith({
       where: {
@@ -133,40 +116,30 @@ describe('KnowledgeService', () => {
   });
 
   it('rejects empty searchable queries', async () => {
-    const { service, supportService } = createService();
-    supportService.resolveOrganization.mockResolvedValue({
-      id: 'org_1',
-      slug: 'org_demo',
-    });
+    const { service } = createService();
 
     await expect(
-      service.search({
-        orgId: 'org_demo',
-        query: '   ',
-        limit: 5,
-      }),
+      service.search(
+        {
+          query: '   ',
+          limit: 5,
+        },
+        'org_1',
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('prevents wrong org access to an article', async () => {
-    const { prisma, service, supportService } = createService();
-    supportService.resolveOrganization.mockResolvedValue({
-      id: 'org_2',
-      slug: 'org_other',
-    });
+    const { prisma, service } = createService();
     prisma.knowledgeArticle.findFirst.mockResolvedValue(null);
 
     await expect(
-      service.getArticle('article_1', 'org_other'),
+      service.getArticle('article_1', 'org_2'),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('updates an article title and normalizes tags', async () => {
-    const { prisma, service, supportService } = createService();
-    supportService.resolveOrganization.mockResolvedValue({
-      id: 'org_1',
-      slug: 'org_demo',
-    });
+    const { prisma, service } = createService();
     prisma.knowledgeArticle.findFirst.mockResolvedValue({
       id: 'article_1',
       orgId: 'org_1',
@@ -177,11 +150,14 @@ describe('KnowledgeService', () => {
       tags: ['billing'],
     });
 
-    const article = await service.updateArticle('article_1', {
-      orgId: 'org_demo',
-      title: ' Updated Title ',
-      tags: ['Billing', 'BILLING'],
-    });
+    const article = await service.updateArticle(
+      'article_1',
+      {
+        title: ' Updated Title ',
+        tags: ['Billing', 'BILLING'],
+      },
+      'org_1',
+    );
 
     expect(prisma.knowledgeArticle.update).toHaveBeenCalledWith({
       where: { id: 'article_1' },
@@ -194,27 +170,19 @@ describe('KnowledgeService', () => {
   });
 
   it('rejects an update with no fields provided', async () => {
-    const { prisma, service, supportService } = createService();
-    supportService.resolveOrganization.mockResolvedValue({
-      id: 'org_1',
-      slug: 'org_demo',
-    });
+    const { prisma, service } = createService();
     prisma.knowledgeArticle.findFirst.mockResolvedValue({
       id: 'article_1',
       orgId: 'org_1',
     });
 
-    await expect(
-      service.updateArticle('article_1', { orgId: 'org_demo' }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.updateArticle('article_1', {}, 'org_1')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 
   it('updates only the status when just status is provided', async () => {
-    const { prisma, service, supportService } = createService();
-    supportService.resolveOrganization.mockResolvedValue({
-      id: 'org_1',
-      slug: 'org_demo',
-    });
+    const { prisma, service } = createService();
     prisma.knowledgeArticle.findFirst.mockResolvedValue({
       id: 'article_1',
       orgId: 'org_1',
@@ -224,10 +192,13 @@ describe('KnowledgeService', () => {
       status: KnowledgeArticleStatus.PUBLISHED,
     });
 
-    await service.updateArticle('article_1', {
-      orgId: 'org_demo',
-      status: KnowledgeArticleStatus.PUBLISHED,
-    });
+    await service.updateArticle(
+      'article_1',
+      {
+        status: KnowledgeArticleStatus.PUBLISHED,
+      },
+      'org_1',
+    );
 
     expect(prisma.knowledgeArticle.update).toHaveBeenCalledWith({
       where: { id: 'article_1' },

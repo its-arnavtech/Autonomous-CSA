@@ -6,10 +6,6 @@ const approvalDecisionValues = ['APPROVED', 'REJECTED'] as const;
 export type ApprovalDecision = (typeof approvalDecisionValues)[number];
 
 export class CreateApprovalDto {
-  @ApiProperty({ default: 'org_demo' })
-  @IsString()
-  orgId!: string;
-
   @ApiProperty()
   @IsString()
   ticketId!: string;
@@ -26,10 +22,6 @@ export class CreateApprovalDto {
 }
 
 export class UpdateApprovalDto {
-  @ApiProperty({ default: 'org_demo' })
-  @IsString()
-  orgId!: string;
-
   @ApiProperty({ enum: approvalDecisionValues })
   @IsIn(approvalDecisionValues)
   status!: ApprovalDecision;

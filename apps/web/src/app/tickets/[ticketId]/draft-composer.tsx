@@ -4,11 +4,10 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
 type DraftComposerProps = {
-  orgId: string;
   ticketId: string;
 };
 
-export function DraftComposer({ orgId, ticketId }: DraftComposerProps) {
+export function DraftComposer({ ticketId }: DraftComposerProps) {
   const router = useRouter();
   const [body, setBody] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +23,7 @@ export function DraftComposer({ orgId, ticketId }: DraftComposerProps) {
         const res = await fetch(`/api/tickets/${encodeURIComponent(ticketId)}/drafts`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ orgId, body }),
+          body: JSON.stringify({ body }),
         });
 
         if (!res.ok) {

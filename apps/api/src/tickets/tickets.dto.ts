@@ -10,13 +10,6 @@ import {
   MinLength,
 } from 'class-validator';
 
-export class OrgQueryDto {
-  @ApiPropertyOptional({ default: 'org_demo' })
-  @IsOptional()
-  @IsString()
-  orgId?: string;
-}
-
 export class CreateTicketDto {
   @ApiProperty()
   @IsString()
@@ -27,6 +20,7 @@ export class CreateTicketDto {
   @ApiProperty()
   @IsString()
   @MinLength(1)
+  @MaxLength(10000)
   body!: string;
 
   @ApiProperty()
@@ -42,11 +36,6 @@ export class CreateTicketDto {
   @MaxLength(120)
   customerName?: string;
 
-  @ApiPropertyOptional({ default: 'org_demo' })
-  @IsOptional()
-  @IsString()
-  orgId?: string;
-
   @ApiPropertyOptional({ enum: TicketPriority, enumName: 'TicketPriority' })
   @IsOptional()
   @IsEnum(TicketPriority)
@@ -54,20 +43,12 @@ export class CreateTicketDto {
 }
 
 export class UpdateTicketStatusDto {
-  @ApiProperty({ default: 'org_demo' })
-  @IsString()
-  orgId!: string;
-
   @ApiProperty({ enum: TicketStatus, enumName: 'TicketStatus' })
   @IsEnum(TicketStatus)
   status!: TicketStatus;
 }
 
 export class UpdateTicketPriorityDto {
-  @ApiProperty({ default: 'org_demo' })
-  @IsString()
-  orgId!: string;
-
   @ApiProperty({ enum: TicketPriority, enumName: 'TicketPriority' })
   @IsEnum(TicketPriority)
   priority!: TicketPriority;

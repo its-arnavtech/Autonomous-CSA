@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
 type SettingsFormProps = {
-  orgId: string;
   initialSettings: {
     autoRespond: boolean;
     requireHumanApproval: boolean;
@@ -16,7 +15,7 @@ type SettingsFormProps = {
   };
 };
 
-export function SettingsForm({ orgId, initialSettings }: SettingsFormProps) {
+export function SettingsForm({ initialSettings }: SettingsFormProps) {
   const router = useRouter();
   const [autoRespond, setAutoRespond] = useState(initialSettings.autoRespond);
   const [requireHumanApproval, setRequireHumanApproval] = useState(
@@ -46,7 +45,7 @@ export function SettingsForm({ orgId, initialSettings }: SettingsFormProps) {
 
     startTransition(() => {
       void (async () => {
-        const res = await fetch(`/api/orgs/${encodeURIComponent(orgId)}/settings`, {
+        const res = await fetch('/api/orgs/settings', {
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
@@ -75,7 +74,6 @@ export function SettingsForm({ orgId, initialSettings }: SettingsFormProps) {
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
       <h2 className="text-lg font-semibold text-slate-900">Organization Settings</h2>
-      <p className="mt-1 text-sm text-slate-500">Org: {orgId}</p>
 
       <div className="mt-6 space-y-5">
         <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-4">

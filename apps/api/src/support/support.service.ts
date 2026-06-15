@@ -13,6 +13,7 @@ import {
   TicketStatus,
   nextEventSequence,
 } from '@agentic-support/db';
+import { ActorType } from '../auth/actor-type.constants';
 import { PrismaService } from '../prisma/prisma.service';
 
 const ticketListInclude = {
@@ -58,22 +59,21 @@ const ticketDetailInclude = {
 export class SupportService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async resolveOrganization(orgSlug = 'org_demo') {
+  async getOrganizationById(orgId: string) {
     const organization = await this.prisma.organization.findUnique({
-      where: { slug: orgSlug },
+      where: { id: orgId },
     });
 
     if (!organization) {
-      throw new BadRequestException(`Unknown organization: ${orgSlug}`);
+      throw new NotFoundException('Organization not found');
     }
 
     return organization;
   }
 
-  async getTicketOrThrow(ticketId: string, orgSlug = 'org_demo') {
-    const organization = await this.resolveOrganization(orgSlug);
+  async getTicketOrThrow(ticketId: string, orgId: string) {
     const ticket = await this.prisma.ticket.findFirst({
-      where: { id: ticketId, orgId: organization.id },
+      where: { id: ticketId, orgId },
       include: ticketDetailInclude,
     });
 
@@ -84,10 +84,9 @@ export class SupportService {
     return ticket;
   }
 
-  async assertTicketAccess(ticketId: string, orgSlug = 'org_demo') {
-    const organization = await this.resolveOrganization(orgSlug);
+  async assertTicketAccess(ticketId: string, orgId: string) {
     const ticket = await this.prisma.ticket.findFirst({
-      where: { id: ticketId, orgId: organization.id },
+      where: { id: ticketId, orgId },
       select: { id: true, orgId: true },
     });
 
@@ -95,13 +94,12 @@ export class SupportService {
       throw new NotFoundException('Ticket not found');
     }
 
-    return { organization, ticket };
+    return { ticket };
   }
 
-  async listTickets(orgSlug = 'org_demo') {
-    const organization = await this.resolveOrganization(orgSlug);
+  async listTickets(orgId: string) {
     const tickets = await this.prisma.ticket.findMany({
-      where: { orgId: organization.id },
+      where: { orgId },
       include: ticketListInclude,
       orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
     });
@@ -125,8 +123,8 @@ export class SupportService {
     }));
   }
 
-  async getTicketDetail(ticketId: string, orgSlug = 'org_demo') {
-    const ticket = await this.getTicketOrThrow(ticketId, orgSlug);
+  async getTicketDetail(ticketId: string, orgId: string) {
+    const ticket = await this.getTicketOrThrow(ticketId, orgId);
     const latestAgentRun = ticket.agentRuns[0] ?? null;
 
     return {
@@ -141,7 +139,10 @@ export class SupportService {
       updatedAt: ticket.updatedAt,
       messages: ticket.messages,
       latestAgentRun,
-      drafts: ticket.drafts,
+      drafts: ticket.drafts.map((draft) => ({
+        ...draft,
+        approvals: draft.approvals,
+      })),
       agentSteps: latestAgentRun?.steps ?? [],
       timeline: ticket.events.map((event) => ({
         id: event.id,
@@ -156,21 +157,21 @@ export class SupportService {
 
   async updateTicketStatus(
     ticketId: string,
-    orgSlug: string,
+    orgId: string,
     status: TicketStatus,
   ) {
-    const { organization } = await this.assertTicketAccess(ticketId, orgSlug);
+    await this.assertTicketAccess(ticketId, orgId);
 
     return this.prisma.$transaction(async (tx) => {
       const ticket = await tx.ticket.update({
         where: { id: ticketId },
         data: { status },
       });
-      const sequence = await nextEventSequence(tx, organization.id, ticketId);
+      const sequence = await nextEventSequence(tx, orgId, ticketId);
 
       await tx.agentEvent.create({
         data: {
-          orgId: organization.id,
+          orgId,
           ticketId,
           type: AgentEventType.TICKET_STATUS_CHANGED,
           sequence,
@@ -184,21 +185,21 @@ export class SupportService {
 
   async updateTicketPriority(
     ticketId: string,
-    orgSlug: string,
+    orgId: string,
     priority: TicketPriority,
   ) {
-    const { organization } = await this.assertTicketAccess(ticketId, orgSlug);
+    await this.assertTicketAccess(ticketId, orgId);
 
     return this.prisma.$transaction(async (tx) => {
       const ticket = await tx.ticket.update({
         where: { id: ticketId },
         data: { priority },
       });
-      const sequence = await nextEventSequence(tx, organization.id, ticketId);
+      const sequence = await nextEventSequence(tx, orgId, ticketId);
 
       await tx.agentEvent.create({
         data: {
-          orgId: organization.id,
+          orgId,
           ticketId,
           type: AgentEventType.TICKET_PRIORITY_CHANGED,
           sequence,
@@ -210,12 +211,11 @@ export class SupportService {
     });
   }
 
-  async getApprovalOrThrow(approvalId: string, orgSlug: string) {
-    const organization = await this.resolveOrganization(orgSlug);
+  async getApprovalOrThrow(approvalId: string, orgId: string) {
     const approval = await this.prisma.humanApproval.findFirst({
       where: {
         id: approvalId,
-        orgId: organization.id,
+        orgId,
       },
     });
 
@@ -223,15 +223,14 @@ export class SupportService {
       throw new NotFoundException('Approval not found');
     }
 
-    return { organization, approval };
+    return { approval };
   }
 
-  async getDraftOrThrow(draftId: string, orgSlug: string) {
-    const organization = await this.resolveOrganization(orgSlug);
+  async getDraftOrThrow(draftId: string, orgId: string) {
     const draft = await this.prisma.outboundDraft.findFirst({
       where: {
         id: draftId,
-        orgId: organization.id,
+        orgId,
       },
       include: {
         approvals: {
@@ -244,15 +243,15 @@ export class SupportService {
       throw new NotFoundException('Draft not found');
     }
 
-    return { organization, draft };
+    return { draft };
   }
 
-  async listDrafts(ticketId: string, orgSlug = 'org_demo') {
-    const { organization } = await this.assertTicketAccess(ticketId, orgSlug);
+  async listDrafts(ticketId: string, orgId: string) {
+    await this.assertTicketAccess(ticketId, orgId);
 
     return this.prisma.outboundDraft.findMany({
       where: {
-        orgId: organization.id,
+        orgId,
         ticketId,
       },
       orderBy: [{ createdAt: 'desc' }],
@@ -264,16 +263,16 @@ export class SupportService {
     });
   }
 
-  async getDraftDetail(draftId: string, orgSlug = 'org_demo') {
-    const { draft } = await this.getDraftOrThrow(draftId, orgSlug);
+  async getDraftDetail(draftId: string, orgId: string) {
+    const { draft } = await this.getDraftOrThrow(draftId, orgId);
 
     return draft;
   }
 
-  async getTimeline(ticketId: string, orgSlug = 'org_demo') {
-    const { organization } = await this.assertTicketAccess(ticketId, orgSlug);
+  async getTimeline(ticketId: string, orgId: string) {
+    await this.assertTicketAccess(ticketId, orgId);
     const events = await this.prisma.agentEvent.findMany({
-      where: { orgId: organization.id, ticketId },
+      where: { orgId, ticketId },
       orderBy: [{ sequence: 'asc' }, { createdAt: 'asc' }],
     });
 
@@ -287,8 +286,8 @@ export class SupportService {
     }));
   }
 
-  async getAgentSteps(ticketId: string, orgSlug = 'org_demo') {
-    const ticket = await this.getTicketOrThrow(ticketId, orgSlug);
+  async getAgentSteps(ticketId: string, orgId: string) {
+    const ticket = await this.getTicketOrThrow(ticketId, orgId);
     const latestRun = ticket.agentRuns[0];
 
     if (!latestRun) {
@@ -304,29 +303,19 @@ export class SupportService {
     });
   }
 
-  async getRetrievals(ticketId: string, orgSlug = 'org_demo') {
-    const { organization } = await this.assertTicketAccess(ticketId, orgSlug);
+  async getRetrievals(ticketId: string, orgId: string) {
+    await this.assertTicketAccess(ticketId, orgId);
 
     return this.prisma.knowledgeRetrieval.findMany({
       where: {
-        orgId: organization.id,
+        orgId,
         ticketId,
       },
       orderBy: [{ createdAt: 'desc' }],
     });
   }
 
-  async getOrCreateOrganizationSettings(orgSlug: string) {
-    const organization = await this.resolveOrganization(orgSlug);
-
-    return this.prisma.organizationSettings.upsert({
-      where: { orgId: organization.id },
-      update: {},
-      create: { orgId: organization.id },
-    });
-  }
-
-  async getOrCreateOrganizationSettingsById(orgId: string) {
+  async getOrCreateOrganizationSettings(orgId: string) {
     return this.prisma.organizationSettings.upsert({
       where: { orgId },
       update: {},
@@ -356,37 +345,46 @@ export class SupportService {
     });
   }
 
-  async createManualDraft(ticketId: string, orgSlug: string, body: string) {
-    const { organization } = await this.assertTicketAccess(ticketId, orgSlug);
+  async createManualDraft(
+    ticketId: string,
+    orgId: string,
+    body: string,
+    actorUserId: string,
+  ) {
+    await this.assertTicketAccess(ticketId, orgId);
 
     return this.prisma.$transaction(async (tx) => {
       const draft = await tx.outboundDraft.create({
         data: {
-          orgId: organization.id,
+          orgId,
           ticketId,
           body,
           status: DraftStatus.DRAFT,
-          createdBy: 'human_stub',
+          createdBy: this.toUserActor(actorUserId),
+          createdByType: ActorType.USER,
+          createdByUserId: actorUserId,
         },
       });
 
       await this.appendTimelineEvent(
         tx,
-        organization.id,
+        orgId,
         ticketId,
         AgentEventType.DRAFT_CREATED,
-        { draftId: draft.id, status: DraftStatus.DRAFT },
+        {
+          draftId: draft.id,
+          status: DraftStatus.DRAFT,
+          actorType: ActorType.USER,
+          actorUserId,
+        },
       );
 
       return draft;
     });
   }
 
-  async editDraft(draftId: string, orgSlug: string, body: string) {
-    const { organization, draft } = await this.getDraftOrThrow(
-      draftId,
-      orgSlug,
-    );
+  async editDraft(draftId: string, orgId: string, body: string) {
+    const { draft } = await this.getDraftOrThrow(draftId, orgId);
 
     if (draft.status === DraftStatus.SENT) {
       throw new BadRequestException('Sent drafts cannot be edited');
@@ -400,7 +398,7 @@ export class SupportService {
 
       await this.appendTimelineEvent(
         tx,
-        organization.id,
+        orgId,
         draft.ticketId,
         AgentEventType.DRAFT_EDITED,
         { draftId, status: updated.status },
@@ -411,17 +409,14 @@ export class SupportService {
     });
   }
 
-  async sendDraft(draftId: string, orgSlug: string) {
-    const { organization, draft } = await this.getDraftOrThrow(
-      draftId,
-      orgSlug,
-    );
+  async sendDraft(draftId: string, orgId: string, actorUserId: string) {
+    const { draft } = await this.getDraftOrThrow(draftId, orgId);
 
     if (draft.status === DraftStatus.SENT) {
       throw new BadRequestException('Draft already sent');
     }
 
-    const settings = await this.getOrCreateOrganizationSettings(orgSlug);
+    const settings = await this.getOrCreateOrganizationSettings(orgId);
     if (
       settings.requireHumanApproval &&
       draft.status !== DraftStatus.APPROVED
@@ -432,7 +427,7 @@ export class SupportService {
     return this.prisma.$transaction(async (tx) => {
       const message = await tx.ticketMessage.create({
         data: {
-          orgId: organization.id,
+          orgId,
           ticketId: draft.ticketId,
           body: draft.body,
           direction: MessageDirection.OUTBOUND,
@@ -445,6 +440,9 @@ export class SupportService {
         data: {
           status: DraftStatus.SENT,
           sentAt: new Date(),
+          sentBy: this.toUserActor(actorUserId),
+          sentByType: ActorType.USER,
+          sentByUserId: actorUserId,
         },
       });
 
@@ -455,7 +453,7 @@ export class SupportService {
 
       await this.appendTimelineEvent(
         tx,
-        organization.id,
+        orgId,
         draft.ticketId,
         AgentEventType.OUTBOUND_MESSAGE_CREATED,
         { draftId, messageId: message.id },
@@ -463,10 +461,15 @@ export class SupportService {
       );
       await this.appendTimelineEvent(
         tx,
-        organization.id,
+        orgId,
         draft.ticketId,
         AgentEventType.DRAFT_SENT,
-        { draftId, status: DraftStatus.SENT },
+        {
+          draftId,
+          status: DraftStatus.SENT,
+          actorType: ActorType.USER,
+          actorUserId,
+        },
         draft.agentRunId ?? undefined,
       );
 
@@ -482,5 +485,9 @@ export class SupportService {
     return value.length > maxLength
       ? `${value.slice(0, maxLength - 1)}...`
       : value;
+  }
+
+  private toUserActor(userId: string) {
+    return `user:${userId}`;
   }
 }
