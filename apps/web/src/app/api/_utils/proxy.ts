@@ -1,4 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  CORRELATION_ID_HEADER,
+  ensureCorrelationId,
+  normalizeCorrelationId,
+} from '@agentic-support/observability';
+import { webLogger } from './web-logger';
+
+export { CORRELATION_ID_HEADER };
 
 const ACCESS_COOKIE = 'au_access_token';
 const REFRESH_COOKIE = 'au_refresh_token';
@@ -77,6 +85,10 @@ function parseDurationToSeconds(value: string) {
 }
 
 export function getForwardedHeaders(req: NextRequest) {
+  return buildForwardedHeaders(req, resolveCorrelationId(req));
+}
+
+function buildForwardedHeaders(req: NextRequest, correlationId: string) {
   const headers = new Headers();
   const forwardedFor = req.headers.get('x-forwarded-for');
   const userAgent = req.headers.get('user-agent');
@@ -89,16 +101,26 @@ export function getForwardedHeaders(req: NextRequest) {
     headers.set('user-agent', userAgent);
   }
 
+  headers.set(CORRELATION_ID_HEADER, correlationId);
+
   return headers;
+}
+
+export function resolveCorrelationId(req: NextRequest) {
+  return (
+    normalizeCorrelationId(req.headers.get(CORRELATION_ID_HEADER)) ??
+    ensureCorrelationId()
+  );
 }
 
 function buildProxyHeaders(params: {
   req: NextRequest;
+  correlationId: string;
   accessToken?: string;
   organizationId?: string;
   includeJsonBodyHeader: boolean;
 }) {
-  const headers = getForwardedHeaders(params.req);
+  const headers = buildForwardedHeaders(params.req, params.correlationId);
 
   if (params.includeJsonBodyHeader) {
     headers.set('content-type', 'application/json');
@@ -118,6 +140,14 @@ function buildProxyHeaders(params: {
 export function getApiBaseUrl() {
   const raw = process.env.API_BASE_URL?.trim();
   return (raw || 'http://localhost:3001').replace(/\/+$/, '');
+}
+
+function getLogRoute(upstreamUrl: string) {
+  try {
+    return new URL(upstreamUrl).pathname;
+  } catch {
+    return upstreamUrl;
+  }
 }
 
 export function getAuthCookieNames() {
@@ -190,7 +220,16 @@ export function clearAuthCookies(response: NextResponse) {
 }
 
 export async function proxyJsonRequest(params: ProxyRequestParams) {
+  const correlationId = resolveCorrelationId(params.req);
+  const route = getLogRoute(params.upstreamUrl);
+
   try {
+    webLogger.info('Proxy request started', {
+      correlationId,
+      method: params.method,
+      route,
+    });
+
     const forwardedBody =
       params.method === 'GET' || params.method === 'DELETE'
         ? undefined
@@ -204,16 +243,46 @@ export async function proxyJsonRequest(params: ProxyRequestParams) {
       requireAuth: params.requireAuth ?? true,
       requireOrganization: params.requireOrganization ?? true,
       allowRefresh: params.allowRefresh ?? true,
+      correlationId,
     });
 
-    if ('response' in upstream) {
+    if (upstream.response) {
+      upstream.response.headers.set(CORRELATION_ID_HEADER, correlationId);
+      webLogger.info('Proxy request completed', {
+        correlationId,
+        method: params.method,
+        route,
+        statusCode: upstream.response.status,
+      });
       return upstream.response;
+    }
+
+    if (!upstream.upstreamResponse.ok) {
+      webLogger.info('Proxy request completed', {
+        correlationId,
+        method: params.method,
+        route,
+        statusCode: upstream.upstreamResponse.status,
+      });
+      return buildSanitizedFailureResponse({
+        correlationId,
+        errorContext: params.errorContext,
+        status: upstream.upstreamResponse.status,
+        upstreamCorrelationId: upstream.upstreamResponse.headers.get(
+          CORRELATION_ID_HEADER,
+        ),
+      });
     }
 
     const body = await upstream.upstreamResponse.text();
     const response = new NextResponse(body, {
       status: upstream.upstreamResponse.status,
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        [CORRELATION_ID_HEADER]:
+          upstream.upstreamResponse.headers.get(CORRELATION_ID_HEADER) ??
+          correlationId,
+      },
     });
 
     if (upstream.refreshedAuth) {
@@ -224,17 +293,33 @@ export async function proxyJsonRequest(params: ProxyRequestParams) {
       );
     }
 
+    webLogger.info('Proxy request completed', {
+      correlationId,
+      method: params.method,
+      route,
+      statusCode: upstream.upstreamResponse.status,
+    });
+
     return response;
   } catch (error) {
-    console.error('[proxy] request failed', {
-      context: params.errorContext,
-      url: params.upstreamUrl,
-      status:
-        error instanceof Error ? error.message : 'unexpected proxy failure',
-    });
+    webLogger.error(
+      'Proxy request failed',
+      error,
+      {
+        correlationId,
+        context: params.errorContext,
+        route: params.upstreamUrl,
+      },
+    );
     return NextResponse.json(
-      { error: params.errorContext },
-      { status: 502 },
+      {
+        error: params.errorContext,
+        correlationId,
+      },
+      {
+        status: 502,
+        headers: { [CORRELATION_ID_HEADER]: correlationId },
+      },
     );
   }
 }
@@ -254,7 +339,29 @@ export async function fetchAuthenticatedJson(
     requireAuth: true,
     requireOrganization: options?.requireOrganization ?? false,
     allowRefresh: options?.allowRefresh ?? true,
+    correlationId: resolveCorrelationId(req),
   });
+}
+
+function buildSanitizedFailureResponse(input: {
+  correlationId: string;
+  errorContext: string;
+  status: number;
+  upstreamCorrelationId?: string | null;
+}) {
+  return NextResponse.json(
+    {
+      error: input.errorContext,
+      correlationId: input.upstreamCorrelationId ?? input.correlationId,
+    },
+    {
+      status: input.status,
+      headers: {
+        [CORRELATION_ID_HEADER]:
+          input.upstreamCorrelationId ?? input.correlationId,
+      },
+    },
+  );
 }
 
 async function sendUpstreamRequest(params: {
@@ -265,6 +372,7 @@ async function sendUpstreamRequest(params: {
   requireAuth: boolean;
   requireOrganization: boolean;
   allowRefresh: boolean;
+  correlationId: string;
 }) {
   const accessToken = params.req.cookies.get(ACCESS_COOKIE)?.value;
   const refreshToken = params.req.cookies.get(REFRESH_COOKIE)?.value;
@@ -272,15 +380,27 @@ async function sendUpstreamRequest(params: {
 
   if (params.requireAuth && !accessToken && !refreshToken) {
     return {
-      response: NextResponse.json({ error: 'Authentication required' }, { status: 401 }),
+      response: NextResponse.json(
+        { error: 'Authentication required', correlationId: params.correlationId },
+        {
+          status: 401,
+          headers: { [CORRELATION_ID_HEADER]: params.correlationId },
+        },
+      ),
     };
   }
 
   if (params.requireOrganization && !organizationId) {
     return {
       response: NextResponse.json(
-        { error: 'Organization selection required' },
-        { status: 400 },
+        {
+          error: 'Organization selection required',
+          correlationId: params.correlationId,
+        },
+        {
+          status: 400,
+          headers: { [CORRELATION_ID_HEADER]: params.correlationId },
+        },
       ),
     };
   }
@@ -288,13 +408,14 @@ async function sendUpstreamRequest(params: {
   let upstreamResponse = await fetch(params.upstreamUrl, {
     method: params.method,
     cache: 'no-store',
-    signal: AbortSignal.timeout(30_000),
-    headers: buildProxyHeaders({
-      req: params.req,
-      accessToken,
-      organizationId: params.requireOrganization ? organizationId : undefined,
-      includeJsonBodyHeader:
-        params.method !== 'GET' && params.method !== 'DELETE',
+      signal: AbortSignal.timeout(30_000),
+      headers: buildProxyHeaders({
+        req: params.req,
+        correlationId: params.correlationId,
+        accessToken,
+        organizationId: params.requireOrganization ? organizationId : undefined,
+        includeJsonBodyHeader:
+          params.method !== 'GET' && params.method !== 'DELETE',
     }),
     body: params.body,
   });
@@ -305,12 +426,17 @@ async function sendUpstreamRequest(params: {
     params.allowRefresh &&
     refreshToken
   ) {
-    refreshedAuth = (await refreshTokens(params.req, refreshToken)) ?? undefined;
+    refreshedAuth =
+      (await refreshTokens(params.req, refreshToken, params.correlationId)) ??
+      undefined;
 
     if (!refreshedAuth) {
       const response = NextResponse.json(
         { error: 'Authentication required' },
-        { status: 401 },
+        {
+          status: 401,
+          headers: { [CORRELATION_ID_HEADER]: params.correlationId },
+        },
       );
       clearAuthCookies(response);
       return { response };
@@ -322,6 +448,7 @@ async function sendUpstreamRequest(params: {
       signal: AbortSignal.timeout(30_000),
       headers: buildProxyHeaders({
         req: params.req,
+        correlationId: params.correlationId,
         accessToken: refreshedAuth.accessToken,
         organizationId: params.requireOrganization ? organizationId : undefined,
         includeJsonBodyHeader:
@@ -338,8 +465,12 @@ async function sendUpstreamRequest(params: {
   };
 }
 
-async function refreshTokens(req: NextRequest, refreshToken: string) {
-  const headers = getForwardedHeaders(req);
+async function refreshTokens(
+  req: NextRequest,
+  refreshToken: string,
+  correlationId: string,
+) {
+  const headers = buildForwardedHeaders(req, correlationId);
   headers.set('content-type', 'application/json');
 
   const response = await fetch(`${getApiBaseUrl()}/auth/refresh`, {

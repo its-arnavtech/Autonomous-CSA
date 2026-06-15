@@ -23,6 +23,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@agentic-support/observability": "workspace:*",
     "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
@@ -30,6 +31,7 @@
     "@agentic-support/db": "workspace:*",
     "bullmq": "^5.67.3",
     "ioredis": "^5.9.2",
+    "prom-client": "^15.1.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },

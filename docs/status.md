@@ -48,3 +48,9 @@ Validation run from `C:\Autonomous-CSA` during the Phase 8 closeout.
 - Login rate limiting is currently in-memory inside the API process and is not yet shared across instances.
 - `@apps/web` has no dedicated automated test suite yet.
 - Invitations, SSO, OAuth/social login, and billing remain out of scope for Phase 8.
+## Phase 9
+
+- Added shared observability helpers for structured logging, correlation, redaction, timing, and safe error serialization
+- Added API and worker health/readiness endpoints plus Prometheus `/metrics`
+- Added queue payload correlation, bounded retry defaults, operational failure persistence, and replay/resolve APIs
+- Added tenant-scoped `/operations` dashboard routes in the web app

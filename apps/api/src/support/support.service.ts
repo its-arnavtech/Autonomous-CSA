@@ -13,7 +13,9 @@ import {
   TicketStatus,
   nextEventSequence,
 } from '@agentic-support/db';
+import { getCorrelationContext } from '@agentic-support/observability';
 import { ActorType } from '../auth/actor-type.constants';
+import { MetricsService } from '../observability/metrics.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const ticketListInclude = {
@@ -57,7 +59,13 @@ const ticketDetailInclude = {
 
 @Injectable()
 export class SupportService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly metrics: MetricsService = {
+      incrementDraftCreated: () => undefined,
+      incrementDraftSent: () => undefined,
+    } as unknown as MetricsService,
+  ) {}
 
   async getOrganizationById(orgId: string) {
     const organization = await this.prisma.organization.findUnique({
@@ -173,6 +181,7 @@ export class SupportService {
         data: {
           orgId,
           ticketId,
+          correlationId: getCorrelationContext()?.correlationId ?? null,
           type: AgentEventType.TICKET_STATUS_CHANGED,
           sequence,
           payload: { status },
@@ -201,6 +210,7 @@ export class SupportService {
         data: {
           orgId,
           ticketId,
+          correlationId: getCorrelationContext()?.correlationId ?? null,
           type: AgentEventType.TICKET_PRIORITY_CHANGED,
           sequence,
           payload: { priority },
@@ -338,6 +348,7 @@ export class SupportService {
         orgId,
         ticketId,
         runId,
+        correlationId: getCorrelationContext()?.correlationId ?? null,
         type,
         sequence,
         payload,
@@ -378,6 +389,8 @@ export class SupportService {
           actorUserId,
         },
       );
+
+      this.metrics.incrementDraftCreated('user');
 
       return draft;
     });
@@ -472,6 +485,8 @@ export class SupportService {
         },
         draft.agentRunId ?? undefined,
       );
+
+      this.metrics.incrementDraftSent('user');
 
       return { draft: updatedDraft, message };
     });

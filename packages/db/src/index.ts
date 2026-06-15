@@ -9,6 +9,7 @@ export {
   KnowledgeArticleStatus,
   MessageDirection,
   MessageStatus,
+  OperationalFailure,
   Prisma,
   PrismaClient,
   TicketPriority,

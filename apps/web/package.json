@@ -7,10 +7,11 @@
     "build": "node -e \"require('fs').rmSync('.next',{ recursive: true, force: true })\" && next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "echo \"No tests configured for @apps/web\"",
+    "test": "node ../api/node_modules/jest/bin/jest.js --config jest.config.cjs --runInBand",
     "typecheck": "next typegen && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@agentic-support/observability": "workspace:*",
     "next": "16.2.6",
     "react": "19.2.3",
     "react-dom": "19.2.3"

@@ -1,17 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  CORRELATION_ID_HEADER,
   clearAuthCookies,
   getForwardedHeaders,
   getApiBaseUrl,
+  resolveCorrelationId,
   setAuthCookies,
 } from '../../_utils/proxy';
+import { webLogger } from '../../_utils/web-logger';
 
 export async function POST(req: NextRequest) {
+  const correlationId = resolveCorrelationId(req);
   const refreshToken = req.cookies.get('au_refresh_token')?.value;
   if (!refreshToken) {
     const response = NextResponse.json(
-      { error: 'Authentication required' },
-      { status: 401 },
+      { error: 'Authentication required', correlationId },
+      {
+        status: 401,
+        headers: { [CORRELATION_ID_HEADER]: correlationId },
+      },
     );
     clearAuthCookies(response);
     return response;
@@ -32,8 +39,14 @@ export async function POST(req: NextRequest) {
     const body = await response.text();
     if (!response.ok) {
       const nextResponse = NextResponse.json(
-        { error: 'Authentication required' },
-        { status: response.status },
+        { error: 'Authentication required', correlationId },
+        {
+          status: response.status,
+          headers: {
+            [CORRELATION_ID_HEADER]:
+              response.headers.get(CORRELATION_ID_HEADER) ?? correlationId,
+          },
+        },
       );
       clearAuthCookies(nextResponse);
       return nextResponse;
@@ -49,6 +62,10 @@ export async function POST(req: NextRequest) {
       user: payload.user,
       memberships: payload.memberships,
     });
+    nextResponse.headers.set(
+      CORRELATION_ID_HEADER,
+      response.headers.get(CORRELATION_ID_HEADER) ?? correlationId,
+    );
     setAuthCookies(
       nextResponse,
       payload,
@@ -56,10 +73,13 @@ export async function POST(req: NextRequest) {
     );
     return nextResponse;
   } catch (error) {
-    console.error('[auth/refresh] proxy failed', error);
+    webLogger.error('Refresh proxy failed', error, { correlationId });
     const nextResponse = NextResponse.json(
-      { error: 'Authentication required' },
-      { status: 502 },
+      { error: 'Authentication required', correlationId },
+      {
+        status: 502,
+        headers: { [CORRELATION_ID_HEADER]: correlationId },
+      },
     );
     clearAuthCookies(nextResponse);
     return nextResponse;

@@ -1,3 +1,4 @@
+import { workerLogger } from '../observability/worker-logger';
 import { LLMConfig } from './llm.types';
 
 function parseIntEnv(
@@ -11,7 +12,7 @@ function parseIntEnv(
   const val = parseInt(raw, 10);
   if (isNaN(val) || val < min || val > max) {
     throw new Error(
-      `Invalid ${name}: expected integer ${min}–${max}, got "${raw}"`,
+      `Invalid ${name}: expected integer ${min}-${max}, got "${raw}"`,
     );
   }
   return val;
@@ -28,7 +29,7 @@ function parseFloatEnv(
   const val = parseFloat(raw);
   if (isNaN(val) || val < min || val > max) {
     throw new Error(
-      `Invalid ${name}: expected number ${min}–${max}, got "${raw}"`,
+      `Invalid ${name}: expected number ${min}-${max}, got "${raw}"`,
     );
   }
   return val;
@@ -51,11 +52,10 @@ export function loadLlmConfig(): LLMConfig {
   const apiKey = process.env.AI_API_KEY ?? null;
 
   if (provider !== 'deterministic' && !apiKey) {
-    // Warn without logging the key value itself
-    console.warn(
-      `[llm] AI_PROVIDER=${provider} but AI_API_KEY is not set. ` +
-        `LLM calls will fail. Set AI_ENABLE_FALLBACK=true to use deterministic fallback.`,
-    );
+    workerLogger.warn('LLM provider configured without API key', {
+      provider,
+      fallbackEnabled: process.env.AI_ENABLE_FALLBACK !== 'false',
+    });
   }
 
   return {

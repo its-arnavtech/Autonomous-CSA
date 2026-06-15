@@ -34,7 +34,10 @@ describe('SupportProcessor', () => {
     guardrailAggregate: GuardrailDecision = GuardrailDecision.ALLOW,
   ) {
     const prisma = {
-      agentRun: { update: jest.fn().mockResolvedValue({}) },
+      agentRun: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        update: jest.fn().mockResolvedValue({}),
+      },
       agentStep: {
         create: jest
           .fn()
@@ -53,6 +56,7 @@ describe('SupportProcessor', () => {
         }),
       },
       outboundDraft: {
+        findFirst: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({
           id: 'draft_1',
           status:
@@ -64,9 +68,18 @@ describe('SupportProcessor', () => {
                 : DraftStatus.APPROVED,
         }),
       },
-      humanApproval: { create: jest.fn().mockResolvedValue({}) },
+      humanApproval: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      operationalFailure: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'failure_1' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
       agentEvent: {
         aggregate: jest.fn().mockResolvedValue({ _max: { sequence: 1 } }),
+        findFirst: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({}),
       },
       $transaction: jest

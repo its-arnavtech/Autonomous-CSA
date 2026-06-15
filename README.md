@@ -30,6 +30,16 @@ Primary browser entry points:
 
 See [docs/AUTH.md](/C:/Autonomous-CSA/docs/AUTH.md) for the request flow, cookie/header contract, RBAC behavior, and bootstrap details. See [docs/PHASE_8_AUTH_TENANCY.md](/C:/Autonomous-CSA/docs/PHASE_8_AUTH_TENANCY.md) for the full Phase 8 closeout report.
 
+## Observability And Operations
+
+Phase 9 adds structured logs, request and job correlation, `/health/live`, `/health/ready`, Prometheus `/metrics`, queue failure persistence, dead-letter handling, and a tenant-scoped `/operations` UI for runs, failures, and audit search/export.
+
+See:
+
+- [docs/OBSERVABILITY.md](/C:/Autonomous-CSA/docs/OBSERVABILITY.md)
+- [docs/OPERATIONS.md](/C:/Autonomous-CSA/docs/OPERATIONS.md)
+- [docs/QUEUE_FAILURES.md](/C:/Autonomous-CSA/docs/QUEUE_FAILURES.md)
+
 ## CI/CD
 
 GitHub Actions now cover quality checks, Prisma migration validation, security scanning, Docker build readiness, CodeQL, and Dependabot hygiene. See [docs/CI_CD.md](/C:/Autonomous-CSA/docs/CI_CD.md) for the workflow breakdown, local equivalent commands, and failure handling guidance.

@@ -1,4 +1,4 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
   AgentEventType,
   AgentStepStatus,
@@ -6,6 +6,12 @@ import {
   LlmEventType,
   Prisma,
 } from '@agentic-support/db';
+import {
+  getCorrelationContext,
+  serializeError,
+  startTimer,
+} from '@agentic-support/observability';
+import { MetricsService } from '../observability/metrics.service';
 import { PrismaService } from '../prisma.service';
 import { CriticAgent } from './critic.agent';
 import { RetrieverAgent } from './retriever.agent';
@@ -19,6 +25,7 @@ import {
 } from './agent-runtime.types';
 import { LlmService } from '../llm/llm.service';
 import { AgentLlmMeta, LLMTask } from '../llm/llm.types';
+import { sumEstimatedCostCents } from '../llm/pricing';
 import {
   ROUTER_SYSTEM_PROMPT,
   buildRouterUserPrompt,
@@ -33,8 +40,38 @@ import {
 
 const DETERMINISTIC_META: AgentLlmMeta = {
   provider: 'deterministic',
+  usage: {
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    estimatedCostMicrounits: 0,
+    estimatedCostCents: 0,
+  },
   fallbackUsed: false,
 };
+
+function toMetricLabel(value: string) {
+  return value.toLowerCase();
+}
+
+function classifyLlmOutcome(error: unknown) {
+  const message =
+    error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+
+  if (message.includes('429') || message.includes('rate limit')) {
+    return 'rate_limited';
+  }
+
+  if (
+    message.includes('timeout') ||
+    message.includes('timed out') ||
+    message.includes('abort')
+  ) {
+    return 'timeout';
+  }
+
+  return 'provider_error';
+}
 
 @Injectable()
 export class AgentRuntimeService {
@@ -46,7 +83,17 @@ export class AgentRuntimeService {
     private readonly retrieverAgent: RetrieverAgent,
     private readonly resolverAgent: ResolverAgent,
     private readonly criticAgent: CriticAgent,
-    @Optional() llmService: LlmService | null = null,
+    @Inject(LlmService) @Optional() llmService: LlmService | null = null,
+    private readonly metrics: MetricsService = {
+      incrementAgentStep: () => undefined,
+      incrementKnowledgeRetrieval: () => undefined,
+      observeKnowledgeResults: () => undefined,
+      incrementKnowledgeUsed: () => undefined,
+      recordLlmCall: () => undefined,
+      observeLlmLatency: () => undefined,
+      recordLlmUsage: () => undefined,
+      incrementLlmFallback: () => undefined,
+    } as unknown as MetricsService,
   ) {
     this.llmService = llmService;
   }
@@ -98,6 +145,10 @@ export class AgentRuntimeService {
           ? AgentEventType.RETRIEVER_RESULTS
           : AgentEventType.KNOWLEDGE_NOT_FOUND,
       afterSuccess: async (output) => {
+        const outcome = output.resultCount > 0 ? 'success' : 'no_result';
+        this.metrics.incrementKnowledgeRetrieval(outcome);
+        this.metrics.observeKnowledgeResults(outcome, output.resultCount);
+
         await this.prisma.knowledgeRetrieval.create({
           data: {
             orgId: input.orgId,
@@ -151,6 +202,7 @@ export class AgentRuntimeService {
       });
 
     if (resolver.usedKnowledgeArticleIds.length > 0) {
+      this.metrics.incrementKnowledgeUsed('resolver');
       await this.appendAgentEvent({
         orgId: input.orgId,
         ticketId: input.ticketId,
@@ -190,10 +242,11 @@ export class AgentRuntimeService {
         llmValidate: validateCriticOutput,
       });
 
-    const estimatedCostCents =
-      (routerMeta.usage?.estimatedCostCents ?? 0) +
-      (resolverMeta.usage?.estimatedCostCents ?? 0) +
-      (criticMeta.usage?.estimatedCostCents ?? 0);
+    const estimatedCostCents = sumEstimatedCostCents([
+      routerMeta.usage?.estimatedCostCents,
+      resolverMeta.usage?.estimatedCostCents,
+      criticMeta.usage?.estimatedCostCents,
+    ]);
 
     return { router, retrieval, resolver, critic, estimatedCostCents };
   }
@@ -216,6 +269,11 @@ export class AgentRuntimeService {
     llmUserPrompt?: string;
     llmValidate?: (raw: unknown) => TOutput;
   }): Promise<{ output: TOutput; llmMeta: AgentLlmMeta }> {
+    const stopTimer = startTimer();
+    const retryCount = Math.max(
+      (getCorrelationContext()?.retryAttempt ?? 1) - 1,
+      0,
+    );
     const step = await this.prisma.agentStep.create({
       data: {
         orgId: params.orgId,
@@ -223,8 +281,13 @@ export class AgentRuntimeService {
         stepType: params.stepType,
         status: AgentStepStatus.STARTED,
         inputJson: params.stepInput,
+        retryCount,
       },
     });
+    this.metrics.incrementAgentStep(
+      params.stepType,
+      toMetricLabel(AgentStepStatus.STARTED),
+    );
 
     await this.appendAgentEvent({
       orgId: params.orgId,
@@ -246,6 +309,10 @@ export class AgentRuntimeService {
         params.llmValidate != null;
 
       if (canUseLlm) {
+        const llmProvider = this.llmService.providerName;
+        const llmModel = this.llmService.getModelForTask(params.llmTask!);
+        const stopLlmTimer = startTimer();
+
         await this.appendAgentEvent({
           orgId: params.orgId,
           ticketId: params.ticketId,
@@ -254,7 +321,7 @@ export class AgentRuntimeService {
           payload: {
             stepType: params.stepType,
             task: params.llmTask,
-            model: this.llmService.getModelForTask(params.llmTask!),
+            model: llmModel,
           },
         });
 
@@ -277,6 +344,25 @@ export class AgentRuntimeService {
             fallbackUsed: false,
             finishReason: llmResult.finishReason,
           };
+          this.metrics.recordLlmCall(
+            llmResult.provider,
+            llmResult.model,
+            'success',
+          );
+          this.metrics.observeLlmLatency(
+            llmResult.provider,
+            llmResult.model,
+            'success',
+            stopLlmTimer(),
+          );
+          this.metrics.recordLlmUsage({
+            provider: llmResult.provider,
+            model: llmResult.model,
+            inputTokens: llmResult.usage.inputTokens,
+            outputTokens: llmResult.usage.outputTokens,
+            estimatedCostMicrounits:
+              llmResult.usage.estimatedCostMicrounits ?? null,
+          });
 
           await this.appendAgentEvent({
             orgId: params.orgId,
@@ -306,6 +392,7 @@ export class AgentRuntimeService {
         } catch (llmErr) {
           const llmMsg =
             llmErr instanceof Error ? llmErr.message : String(llmErr);
+          const llmOutcome = classifyLlmOutcome(llmErr);
 
           await this.appendAgentEvent({
             orgId: params.orgId,
@@ -317,6 +404,13 @@ export class AgentRuntimeService {
               message: llmMsg.slice(0, 500),
             },
           });
+          this.metrics.recordLlmCall(llmProvider, llmModel, llmOutcome);
+          this.metrics.observeLlmLatency(
+            llmProvider,
+            llmModel,
+            llmOutcome,
+            stopLlmTimer(),
+          );
 
           if (!this.llmService.isFallbackEnabled()) {
             throw llmErr;
@@ -332,10 +426,19 @@ export class AgentRuntimeService {
               reason: llmMsg.slice(0, 200),
             },
           });
+          this.metrics.incrementLlmFallback(llmProvider, llmModel);
 
           output = await params.execute();
           llmMeta = {
-            provider: this.llmService.providerName,
+            provider: llmProvider,
+            model: llmModel,
+            usage: {
+              inputTokens: 0,
+              outputTokens: 0,
+              totalTokens: 0,
+              estimatedCostMicrounits: 0,
+              estimatedCostCents: 0,
+            },
             fallbackUsed: true,
           };
         }
@@ -347,8 +450,7 @@ export class AgentRuntimeService {
       const eventType =
         params.outputEventType?.(output) ?? params.successEventType;
 
-      // Embed LLM metadata in outputJson._llm until `prisma generate` picks up the
-      // new columns from migration 20260614070000_phase7_llm_runtime.
+      // Keep LLM metadata mirrored in outputJson for audit inspection.
       const outputJson =
         llmMeta.provider !== 'deterministic' || llmMeta.fallbackUsed
           ? ({
@@ -370,9 +472,19 @@ export class AgentRuntimeService {
         data: {
           status,
           outputJson,
+          provider:
+            llmMeta.provider !== 'deterministic' || llmMeta.fallbackUsed
+              ? llmMeta.provider
+              : null,
+          model: llmMeta.model ?? null,
+          inputTokens: llmMeta.usage?.inputTokens ?? null,
+          outputTokens: llmMeta.usage?.outputTokens ?? null,
+          estimatedCostCents: llmMeta.usage?.estimatedCostCents ?? null,
           finishedAt: new Date(),
+          durationMs: stopTimer(),
         },
       });
+      this.metrics.incrementAgentStep(params.stepType, toMetricLabel(status));
 
       await params.afterSuccess?.(output, step.id);
 
@@ -386,23 +498,34 @@ export class AgentRuntimeService {
 
       return { output, llmMeta };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const serialized = serializeError(error);
 
       await this.prisma.agentStep.update({
         where: { id: step.id },
         data: {
           status: AgentStepStatus.FAILED,
-          errorMessage: message,
+          errorMessage: serialized.message,
+          errorCode: serialized.errorCode,
           finishedAt: new Date(),
+          durationMs: stopTimer(),
         },
       });
+      this.metrics.incrementAgentStep(
+        params.stepType,
+        toMetricLabel(AgentStepStatus.FAILED),
+      );
 
       await this.appendAgentEvent({
         orgId: params.orgId,
         ticketId: params.ticketId,
         runId: params.runId,
         type: AgentEventType.AGENT_STEP_FAILED,
-        payload: { stepId: step.id, stepType: params.stepType, message },
+        payload: {
+          stepId: step.id,
+          stepType: params.stepType,
+          message: serialized.message,
+          errorCode: serialized.errorCode,
+        },
       });
 
       throw error;
@@ -426,6 +549,7 @@ export class AgentRuntimeService {
         orgId: params.orgId,
         ticketId: params.ticketId,
         runId: params.runId,
+        correlationId: getCorrelationContext()?.correlationId ?? null,
         sequence: (max._max.sequence ?? 0) + 1,
         type: params.type,
         payload: params.payload,

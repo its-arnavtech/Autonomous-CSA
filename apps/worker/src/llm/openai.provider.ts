@@ -1,5 +1,6 @@
 import { ILlmProvider } from './llm-provider.interface';
 import { LLMRequest, LLMStructuredResponse } from './llm.types';
+import { calculateLlmCost } from './pricing';
 import { safeParseJson, truncateForLog } from './safe-json';
 
 type OpenAIChoice = {
@@ -16,11 +17,6 @@ type OpenAIResponse = {
   };
   model: string;
 };
-
-// gpt-4o-mini pricing as of mid-2025: $0.15/1M input, $0.60/1M output
-function estimateCostCents(inputTokens: number, outputTokens: number): number {
-  return Math.ceil((inputTokens * 0.00015 + outputTokens * 0.0006) / 10);
-}
 
 export class OpenAIProvider implements ILlmProvider {
   readonly providerName = 'openai';
@@ -84,6 +80,12 @@ export class OpenAIProvider implements ILlmProvider {
     const inputTokens = json.usage?.prompt_tokens ?? 0;
     const outputTokens = json.usage?.completion_tokens ?? 0;
     const totalTokens = json.usage?.total_tokens ?? inputTokens + outputTokens;
+    const cost = calculateLlmCost({
+      provider: this.providerName,
+      model: resolvedModel,
+      inputTokens,
+      outputTokens,
+    });
 
     return {
       output,
@@ -94,7 +96,8 @@ export class OpenAIProvider implements ILlmProvider {
         inputTokens,
         outputTokens,
         totalTokens,
-        estimatedCostCents: estimateCostCents(inputTokens, outputTokens),
+        estimatedCostMicrounits: cost.estimatedCostMicrounits,
+        estimatedCostCents: cost.estimatedCostCents,
       },
       finishReason,
     };
