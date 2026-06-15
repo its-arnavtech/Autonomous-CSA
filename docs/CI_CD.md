@@ -35,7 +35,19 @@ CI runs with deterministic placeholders:
 - `AI_API_KEY=ci-placeholder`
 - `AI_ENABLE_FALLBACK=true`
 
-That keeps CI deterministic, avoids external model calls, and matches the current no-auth, no-production-deploy phase of the product.
+That keeps CI deterministic, avoids external model calls, and remains compatible with the new auth phase.
+
+## Auth-related CI environment
+
+CI now also needs safe non-production auth values so auth tests and web builds can run without using real secrets:
+
+- `API_BASE_URL`
+- `JWT_ACCESS_SECRET`
+- `JWT_REFRESH_SECRET`
+- `JWT_ACCESS_TTL`
+- `JWT_REFRESH_TTL`
+
+These values should be safe placeholders in GitHub Actions and must not be production credentials. Real production secrets should be injected separately by the deployment environment.
 
 ## Local equivalent commands
 

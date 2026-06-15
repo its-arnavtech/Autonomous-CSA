@@ -1,4 +1,4 @@
-import { Controller, Post } from '@nestjs/common';
+import { Controller, NotFoundException, Post } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 
@@ -8,6 +8,10 @@ export class QueueController {
 
   @Post('hello')
   async enqueueHello() {
+    if (process.env.NODE_ENV === 'production') {
+      throw new NotFoundException();
+    }
+
     const job = await this.queue.add('hello', { msg: 'hello from api' });
     return { enqueued: true, jobId: job.id };
   }

@@ -1,14 +1,20 @@
+import { NextRequest } from 'next/server';
 import { getApiBaseUrl, proxyJsonRequest } from '../_utils/proxy';
 
-export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const orgId = url.searchParams.get('orgId') ?? 'org_demo';
-  const upstreamUrl = `${getApiBaseUrl()}/tickets?orgId=${encodeURIComponent(orgId)}`;
-
+export async function GET(req: NextRequest) {
   return proxyJsonRequest({
     req,
     method: 'GET',
-    upstreamUrl,
+    upstreamUrl: `${getApiBaseUrl()}/tickets`,
     errorContext: 'Failed to load tickets from API',
+  });
+}
+
+export async function POST(req: NextRequest) {
+  return proxyJsonRequest({
+    req,
+    method: 'POST',
+    upstreamUrl: `${getApiBaseUrl()}/tickets`,
+    errorContext: 'Failed to create ticket in API',
   });
 }

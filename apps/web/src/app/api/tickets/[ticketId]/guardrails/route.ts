@@ -1,19 +1,17 @@
+import { NextRequest } from 'next/server';
 import { getApiBaseUrl, proxyJsonRequest } from '../../../_utils/proxy';
 
 type RouteContext = {
   params: { ticketId: string } | Promise<{ ticketId: string }>;
 };
 
-export async function GET(req: Request, { params }: RouteContext) {
+export async function GET(req: NextRequest, { params }: RouteContext) {
   const { ticketId } = await params;
-  const url = new URL(req.url);
-  const orgId = url.searchParams.get('orgId') ?? 'org_demo';
-  const upstreamUrl = `${getApiBaseUrl()}/tickets/${encodeURIComponent(ticketId)}/guardrails?orgId=${encodeURIComponent(orgId)}`;
 
   return proxyJsonRequest({
     req,
     method: 'GET',
-    upstreamUrl,
-    errorContext: 'Failed to load guardrail checks from API',
+    upstreamUrl: `${getApiBaseUrl()}/tickets/${encodeURIComponent(ticketId)}/guardrails`,
+    errorContext: 'Failed to load ticket guardrails from API',
   });
 }

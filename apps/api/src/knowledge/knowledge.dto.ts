@@ -14,10 +14,6 @@ import {
 } from 'class-validator';
 
 export class CreateKnowledgeArticleDto {
-  @ApiProperty({ default: 'org_demo' })
-  @IsString()
-  orgId!: string;
-
   @ApiProperty()
   @IsString()
   @MinLength(1)
@@ -51,11 +47,6 @@ export class CreateKnowledgeArticleDto {
 }
 
 export class ListKnowledgeArticlesQueryDto {
-  @ApiPropertyOptional({ default: 'org_demo' })
-  @IsOptional()
-  @IsString()
-  orgId?: string;
-
   @ApiPropertyOptional({
     enum: KnowledgeArticleStatus,
     enumName: 'KnowledgeArticleStatus',
@@ -72,10 +63,6 @@ export class ListKnowledgeArticlesQueryDto {
 }
 
 export class UpdateKnowledgeArticleDto {
-  @ApiProperty({ default: 'org_demo' })
-  @IsString()
-  orgId!: string;
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -111,10 +98,6 @@ export class UpdateKnowledgeArticleDto {
 }
 
 export class SearchKnowledgeDto {
-  @ApiProperty({ default: 'org_demo' })
-  @IsString()
-  orgId!: string;
-
   @ApiProperty({ maxLength: 500 })
   @IsString()
   @MinLength(1)

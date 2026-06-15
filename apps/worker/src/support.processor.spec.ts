@@ -157,8 +157,10 @@ describe('SupportProcessor', () => {
         agentRunId: 'run_1',
         body: 'Thanks for reaching out. We are reviewing the payment details you mentioned and will follow up with the next steps shortly.',
         status: DraftStatus.PENDING_APPROVAL,
-        createdBy: 'agent_stub',
+        createdBy: 'agent',
+        createdByType: 'AGENT',
         approvedBy: null,
+        approvedByType: null,
       },
     });
     expect(prisma.humanApproval.create).toHaveBeenCalledWith({

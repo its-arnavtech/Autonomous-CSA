@@ -1,5 +1,6 @@
-import Link from 'next/link';
-import { headers } from 'next/headers';
+import { AppShell } from '../_auth/app-shell';
+import { OrganizationSelection } from '../_auth/organization-selection';
+import { requireSessionForPage } from '../_auth/server-auth';
 import { KnowledgeManager } from './knowledge-manager';
 
 type KnowledgeArticle = {
@@ -13,21 +14,28 @@ type KnowledgeArticle = {
 
 type KnowledgePageProps = {
   searchParams:
-    | { orgId?: string; q?: string; status?: string }
-    | Promise<{ orgId?: string; q?: string; status?: string }>;
+    | { q?: string; status?: string }
+    | Promise<{ q?: string; status?: string }>;
 };
 
 export default async function KnowledgePage({ searchParams }: KnowledgePageProps) {
+  const context = await requireSessionForPage();
+
+  if (!context.activeMembership) {
+    return (
+      <AppShell
+        session={context.session}
+        activeMembership={context.activeMembership}
+      >
+        <OrganizationSelection session={context.session} />
+      </AppShell>
+    );
+  }
+
   const resolvedSearchParams = await searchParams;
-  const orgId = resolvedSearchParams.orgId ?? 'org_demo';
   const q = resolvedSearchParams.q ?? '';
   const status = resolvedSearchParams.status ?? '';
-  const h = await headers();
-  const host = h.get('host');
-  const proto = h.get('x-forwarded-proto') ?? 'http';
-  const base = `${proto}://${host}`;
-  const articlesUrl = new URL(`${base}/api/knowledge/articles`);
-  articlesUrl.searchParams.set('orgId', orgId);
+  const articlesUrl = new URL(`${context.baseUrl}/api/knowledge/articles`);
   if (q) {
     articlesUrl.searchParams.set('q', q);
   }
@@ -35,66 +43,55 @@ export default async function KnowledgePage({ searchParams }: KnowledgePageProps
     articlesUrl.searchParams.set('status', status);
   }
 
-  const res = await fetch(articlesUrl.toString(), { cache: 'no-store' });
+  const response = await fetch(articlesUrl.toString(), {
+    cache: 'no-store',
+    headers: { cookie: context.cookieHeader },
+  });
 
-  if (!res.ok) {
-    const detail = await res.text();
-
-    return (
+  let content: React.ReactNode;
+  if (!response.ok) {
+    const detail = await response.text();
+    content = (
       <main className="mx-auto max-w-5xl space-y-4 px-6 py-8">
-        <Link
-          href={`/tickets?orgId=${encodeURIComponent(orgId)}`}
-          className="text-sm font-medium text-slate-500 underline underline-offset-4"
-        >
-          Back to inbox
-        </Link>
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5">
-          <h1 className="text-2xl font-semibold text-rose-800">
+          <h2 className="text-2xl font-semibold text-rose-800">
             Failed to load knowledge articles
-          </h1>
+          </h2>
           <pre className="mt-3 overflow-auto rounded-xl bg-white/80 p-3 text-xs text-slate-800">
             {detail}
           </pre>
         </div>
       </main>
     );
-  }
-
-  const articles = (await res.json()) as KnowledgeArticle[];
-
-  return (
-    <main className="mx-auto max-w-5xl space-y-6 px-6 py-8">
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-4">
-          <Link
-            href={`/tickets?orgId=${encodeURIComponent(orgId)}`}
-            className="text-sm font-medium text-slate-500 underline underline-offset-4"
-          >
-            Back to inbox
-          </Link>
-          <Link
-            href={`/settings?orgId=${encodeURIComponent(orgId)}`}
-            className="text-sm font-medium text-slate-500 underline underline-offset-4"
-          >
-            Settings
-          </Link>
-        </div>
+  } else {
+    const articles = (await response.json()) as KnowledgeArticle[];
+    content = (
+      <main className="mx-auto max-w-5xl space-y-6 px-6 py-8">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
+          <h2 className="text-3xl font-semibold tracking-tight text-slate-900">
             Knowledge Base
-          </h1>
+          </h2>
           <p className="mt-1 text-sm text-slate-500">
-            Manage deterministic internal support articles for {orgId}.
+            Manage deterministic internal support articles for{' '}
+            {context.activeMembership.organizationName}.
           </p>
         </div>
-      </div>
 
-      <KnowledgeManager
-        orgId={orgId}
-        initialArticles={articles}
-        initialQuery={q}
-        initialStatus={status}
-      />
-    </main>
+        <KnowledgeManager
+          initialArticles={articles}
+          initialQuery={q}
+          initialStatus={status}
+        />
+      </main>
+    );
+  }
+
+  return (
+    <AppShell
+      session={context.session}
+      activeMembership={context.activeMembership}
+    >
+      {content}
+    </AppShell>
   );
 }

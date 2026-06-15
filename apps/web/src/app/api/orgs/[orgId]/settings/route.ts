@@ -1,29 +1,28 @@
+import { NextRequest } from 'next/server';
 import { getApiBaseUrl, proxyJsonRequest } from '../../../_utils/proxy';
 
 type RouteContext = {
   params: { orgId: string } | Promise<{ orgId: string }>;
 };
 
-export async function GET(req: Request, { params }: RouteContext) {
-  const { orgId } = await params;
-  const upstreamUrl = `${getApiBaseUrl()}/orgs/${encodeURIComponent(orgId)}/settings`;
+export async function GET(req: NextRequest, { params }: RouteContext) {
+  await params;
 
   return proxyJsonRequest({
     req,
     method: 'GET',
-    upstreamUrl,
+    upstreamUrl: `${getApiBaseUrl()}/orgs/settings`,
     errorContext: 'Failed to load organization settings from API',
   });
 }
 
-export async function PATCH(req: Request, { params }: RouteContext) {
-  const { orgId } = await params;
-  const upstreamUrl = `${getApiBaseUrl()}/orgs/${encodeURIComponent(orgId)}/settings`;
+export async function PATCH(req: NextRequest, { params }: RouteContext) {
+  await params;
 
   return proxyJsonRequest({
     req,
     method: 'PATCH',
-    upstreamUrl,
+    upstreamUrl: `${getApiBaseUrl()}/orgs/settings`,
     errorContext: 'Failed to update organization settings',
   });
 }

@@ -13,7 +13,6 @@ type KnowledgeArticle = {
 };
 
 type KnowledgeManagerProps = {
-  orgId: string;
   initialArticles: KnowledgeArticle[];
   initialQuery?: string;
   initialStatus?: string;
@@ -31,7 +30,6 @@ function statusTone(status: KnowledgeArticle['status']) {
 }
 
 export function KnowledgeManager({
-  orgId,
   initialArticles,
   initialQuery = '',
   initialStatus = '',
@@ -48,7 +46,7 @@ export function KnowledgeManager({
   const [isPending, startTransition] = useTransition();
 
   const refreshWithFilters = (nextQuery = query, nextStatus = statusFilter) => {
-    const params = new URLSearchParams({ orgId });
+    const params = new URLSearchParams();
     if (nextQuery.trim()) {
       params.set('q', nextQuery.trim());
     }
@@ -70,7 +68,6 @@ export function KnowledgeManager({
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
-            orgId,
             title,
             body,
             tags: tags
@@ -106,7 +103,6 @@ export function KnowledgeManager({
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
-            orgId,
             title: article.title,
             body: article.body,
             tags: article.tags,
@@ -131,10 +127,9 @@ export function KnowledgeManager({
 
     startTransition(() => {
       void (async () => {
-        const res = await fetch(
-          `/api/knowledge/articles/${encodeURIComponent(articleId)}?orgId=${encodeURIComponent(orgId)}`,
-          { method: 'DELETE' },
-        );
+        const res = await fetch(`/api/knowledge/articles/${encodeURIComponent(articleId)}`, {
+          method: 'DELETE',
+        });
 
         if (!res.ok) {
           setError((await res.text()) || 'Failed to archive article.');
@@ -151,7 +146,6 @@ export function KnowledgeManager({
     <div className="space-y-6">
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">Create Knowledge Article</h2>
-        <p className="mt-1 text-sm text-slate-500">Org: {orgId}</p>
 
         <div className="mt-5 grid gap-4">
           <input

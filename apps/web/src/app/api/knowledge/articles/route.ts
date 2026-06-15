@@ -1,15 +1,16 @@
+import { NextRequest } from 'next/server';
 import { getApiBaseUrl, proxyJsonRequest } from '../../_utils/proxy';
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   const url = new URL(req.url);
-  const orgId = url.searchParams.get('orgId') ?? 'org_demo';
+  const upstreamUrl = new URL(`${getApiBaseUrl()}/knowledge/articles`);
   const status = url.searchParams.get('status');
   const q = url.searchParams.get('q');
-  const upstreamUrl = new URL(`${getApiBaseUrl()}/knowledge/articles`);
-  upstreamUrl.searchParams.set('orgId', orgId);
+
   if (status) {
     upstreamUrl.searchParams.set('status', status);
   }
+
   if (q) {
     upstreamUrl.searchParams.set('q', q);
   }
@@ -22,7 +23,7 @@ export async function GET(req: Request) {
   });
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   return proxyJsonRequest({
     req,
     method: 'POST',

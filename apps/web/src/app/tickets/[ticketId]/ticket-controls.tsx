@@ -15,14 +15,12 @@ const ticketPriorities = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const;
 
 type TicketControlsProps = {
   ticketId: string;
-  orgId: string;
   status: (typeof ticketStatuses)[number];
   priority: (typeof ticketPriorities)[number];
 };
 
 export function TicketControls({
   ticketId,
-  orgId,
   status,
   priority,
 }: TicketControlsProps) {
@@ -45,7 +43,7 @@ export function TicketControls({
         const res = await fetch(`/api/tickets/${encodeURIComponent(ticketId)}/status`, {
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ orgId, status: selectedStatus }),
+          body: JSON.stringify({ status: selectedStatus }),
         });
 
         if (!res.ok) {
@@ -69,7 +67,7 @@ export function TicketControls({
         const res = await fetch(`/api/tickets/${encodeURIComponent(ticketId)}/priority`, {
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ orgId, priority: selectedPriority }),
+          body: JSON.stringify({ priority: selectedPriority }),
         });
 
         if (!res.ok) {

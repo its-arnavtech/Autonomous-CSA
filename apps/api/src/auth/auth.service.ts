@@ -1,0 +1,443 @@
+import { randomUUID } from 'crypto';
+import {
+  ConflictException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { Prisma } from '@agentic-support/db';
+import { PrismaService } from '../prisma/prisma.service';
+import { PasswordService } from './password.service';
+import { OrganizationRole } from './organization-role.constants';
+import { TokenService } from './token.service';
+import type { TenantMembership } from './authenticated-user.type';
+import type {
+  LoginDto,
+  RegisterDto,
+} from './auth.dto';
+
+type RequestMetadata = {
+  userAgent?: string | null;
+  ipAddress?: string | null;
+};
+
+type SafeAuthResponse = {
+  user: {
+    id: string;
+    email: string;
+    displayName: string | null;
+  };
+  memberships: Array<{
+    organizationId: string;
+    organizationSlug: string;
+    organizationName: string;
+    role: OrganizationRole;
+  }>;
+  accessToken: string;
+  refreshToken: string;
+};
+
+type SafeMeResponse = Omit<SafeAuthResponse, 'accessToken' | 'refreshToken'>;
+
+@Injectable()
+export class AuthService {
+  private readonly loginAttempts = new Map<
+    string,
+    { count: number; firstFailureAt: number; blockedUntil?: number }
+  >();
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly passwordService: PasswordService,
+    private readonly tokenService: TokenService,
+  ) {}
+
+  async register(dto: RegisterDto, metadata: RequestMetadata) {
+    const normalizedEmail = this.normalizeEmail(dto.email);
+    const organizationSlug = this.normalizeOrganizationSlug(
+      dto.organizationSlug ?? dto.organizationName,
+    );
+
+    const [existingUser, existingOrganization] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { normalizedEmail },
+        select: { id: true },
+      }),
+      this.prisma.organization.findUnique({
+        where: { slug: organizationSlug },
+        select: { id: true },
+      }),
+    ]);
+
+    if (existingUser) {
+      throw new ConflictException('Email is already in use');
+    }
+
+    if (existingOrganization) {
+      throw new ConflictException('Organization slug is already in use');
+    }
+
+    const passwordHash = await this.passwordService.hashPassword(dto.password);
+    const userId = randomUUID();
+    const organizationId = randomUUID();
+    const membershipId = randomUUID();
+    const sessionId = randomUUID();
+    const refreshToken = this.tokenService.createRefreshToken(userId, sessionId);
+    const refreshPayload = this.tokenService.verifyRefreshToken(refreshToken);
+    const accessToken = this.tokenService.createAccessToken({
+      id: userId,
+      email: normalizedEmail,
+    });
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.create({
+        data: {
+          id: userId,
+          email: normalizedEmail,
+          normalizedEmail,
+          passwordHash,
+          displayName: dto.displayName?.trim() || null,
+        },
+      });
+
+      await tx.organization.create({
+        data: {
+          id: organizationId,
+          name: dto.organizationName.trim(),
+          slug: organizationSlug,
+        },
+      });
+
+      await tx.organizationSettings.create({
+        data: { orgId: organizationId },
+      });
+
+      await tx.organizationMembership.create({
+        data: {
+          id: membershipId,
+          userId,
+          organizationId,
+          role: OrganizationRole.OWNER,
+        },
+      });
+
+      await tx.refreshSession.create({
+        data: {
+          id: sessionId,
+          userId,
+          tokenHash: this.tokenService.hashRefreshToken(refreshToken),
+          expiresAt: this.tokenService.getRefreshExpiry(refreshPayload.exp),
+          userAgent: metadata.userAgent ?? null,
+          ipAddress: metadata.ipAddress ?? null,
+        },
+      });
+    });
+
+    const profile = await this.getMe(userId);
+
+    return {
+      ...profile,
+      accessToken,
+      refreshToken,
+    };
+  }
+
+  async login(dto: LoginDto, metadata: RequestMetadata) {
+    const normalizedEmail = this.normalizeEmail(dto.email);
+    this.assertLoginNotRateLimited(normalizedEmail, metadata.ipAddress);
+
+    const user = await this.prisma.user.findUnique({
+      where: { normalizedEmail },
+      select: {
+        id: true,
+        email: true,
+        passwordHash: true,
+        isActive: true,
+      },
+    });
+
+    if (!user || !user.isActive) {
+      this.recordFailedLogin(normalizedEmail, metadata.ipAddress);
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const passwordMatches = await this.passwordService.verifyPassword(
+      user.passwordHash,
+      dto.password,
+    );
+
+    if (!passwordMatches) {
+      this.recordFailedLogin(normalizedEmail, metadata.ipAddress);
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    this.clearFailedLogin(normalizedEmail, metadata.ipAddress);
+
+    const sessionId = randomUUID();
+    const refreshToken = this.tokenService.createRefreshToken(user.id, sessionId);
+    const refreshPayload = this.tokenService.verifyRefreshToken(refreshToken);
+    const accessToken = this.tokenService.createAccessToken({
+      id: user.id,
+      email: user.email,
+    });
+
+    await this.prisma.refreshSession.create({
+      data: {
+        id: sessionId,
+        userId: user.id,
+        tokenHash: this.tokenService.hashRefreshToken(refreshToken),
+        expiresAt: this.tokenService.getRefreshExpiry(refreshPayload.exp),
+        userAgent: metadata.userAgent ?? null,
+        ipAddress: metadata.ipAddress ?? null,
+      },
+    });
+
+    const profile = await this.getMe(user.id);
+
+    return {
+      ...profile,
+      accessToken,
+      refreshToken,
+    };
+  }
+
+  async refresh(refreshToken: string, metadata: RequestMetadata) {
+    let payload: ReturnType<TokenService['verifyRefreshToken']>;
+
+    try {
+      payload = this.tokenService.verifyRefreshToken(refreshToken);
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const existingSession = await this.prisma.refreshSession.findUnique({
+      where: { id: payload.sid },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            isActive: true,
+          },
+        },
+      },
+    });
+
+    if (
+      !existingSession ||
+      existingSession.revokedAt ||
+      existingSession.expiresAt.getTime() <= Date.now() ||
+      !existingSession.user.isActive
+    ) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const expectedHash = this.tokenService.hashRefreshToken(refreshToken);
+    if (expectedHash !== existingSession.tokenHash) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const newSessionId = randomUUID();
+    const nextRefreshToken = this.tokenService.createRefreshToken(
+      existingSession.user.id,
+      newSessionId,
+    );
+    const nextRefreshPayload =
+      this.tokenService.verifyRefreshToken(nextRefreshToken);
+    const accessToken = this.tokenService.createAccessToken({
+      id: existingSession.user.id,
+      email: existingSession.user.email,
+    });
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.refreshSession.update({
+        where: { id: existingSession.id },
+        data: {
+          revokedAt: new Date(),
+          lastUsedAt: new Date(),
+        },
+      });
+
+      await tx.refreshSession.create({
+        data: {
+          id: newSessionId,
+          userId: existingSession.user.id,
+          tokenHash: this.tokenService.hashRefreshToken(nextRefreshToken),
+          expiresAt: this.tokenService.getRefreshExpiry(nextRefreshPayload.exp),
+          userAgent: metadata.userAgent ?? existingSession.userAgent ?? null,
+          ipAddress: metadata.ipAddress ?? existingSession.ipAddress ?? null,
+        },
+      });
+    });
+
+    const profile = await this.getMe(existingSession.user.id);
+
+    return {
+      ...profile,
+      accessToken,
+      refreshToken: nextRefreshToken,
+    };
+  }
+
+  async logout(refreshToken: string) {
+    try {
+      const payload = this.tokenService.verifyRefreshToken(refreshToken);
+
+      await this.prisma.refreshSession.updateMany({
+        where: {
+          id: payload.sid,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: new Date(),
+          lastUsedAt: new Date(),
+        },
+      });
+    } catch {
+      return { success: true };
+    }
+
+    return { success: true };
+  }
+
+  async getMe(userId: string): Promise<SafeMeResponse> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        memberships: {
+          include: {
+            organization: {
+              select: {
+                id: true,
+                slug: true,
+                name: true,
+              },
+            },
+          },
+          orderBy: [
+            { role: 'asc' },
+            { organization: { name: 'asc' } },
+          ],
+        },
+      },
+    });
+
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('User is not active');
+    }
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+      },
+      memberships: user.memberships.map((membership) => ({
+        organizationId: membership.organization.id,
+        organizationSlug: membership.organization.slug,
+        organizationName: membership.organization.name,
+        role: membership.role,
+      })),
+    };
+  }
+
+  async resolveTenantMembership(
+    userId: string,
+    organizationId: string,
+  ): Promise<TenantMembership | null> {
+    const membership = await this.prisma.organizationMembership.findFirst({
+      where: {
+        userId,
+        organizationId,
+        user: { isActive: true },
+      },
+      include: {
+        organization: {
+          select: {
+            id: true,
+            slug: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!membership) {
+      return null;
+    }
+
+    return {
+      membershipId: membership.id,
+      organizationId: membership.organization.id,
+      organizationSlug: membership.organization.slug,
+      organizationName: membership.organization.name,
+      role: membership.role,
+    };
+  }
+
+  async assertOrganizationAccess(userId: string, organizationId: string) {
+    return this.resolveTenantMembership(userId, organizationId);
+  }
+
+  private normalizeEmail(email: string) {
+    return email.trim().toLowerCase();
+  }
+
+  private normalizeOrganizationSlug(value: string) {
+    const slug = value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-{2,}/g, '-');
+
+    if (slug.length < 3 || slug.length > 64) {
+      throw new ConflictException(
+        'Organization slug must be between 3 and 64 characters after normalization',
+      );
+    }
+
+    return slug;
+  }
+
+  private buildAttemptKey(email: string, ipAddress?: string | null) {
+    return `${ipAddress ?? 'unknown'}:${email}`;
+  }
+
+  private assertLoginNotRateLimited(email: string, ipAddress?: string | null) {
+    const key = this.buildAttemptKey(email, ipAddress);
+    const existing = this.loginAttempts.get(key);
+    if (existing?.blockedUntil && existing.blockedUntil > Date.now()) {
+      throw new HttpException(
+        'Too many login attempts. Please try again later.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+  }
+
+  private recordFailedLogin(email: string, ipAddress?: string | null) {
+    const key = this.buildAttemptKey(email, ipAddress);
+    const now = Date.now();
+    const existing = this.loginAttempts.get(key);
+
+    if (!existing || now - existing.firstFailureAt > 15 * 60_000) {
+      this.loginAttempts.set(key, {
+        count: 1,
+        firstFailureAt: now,
+      });
+      return;
+    }
+
+    const count = existing.count + 1;
+    this.loginAttempts.set(key, {
+      count,
+      firstFailureAt: existing.firstFailureAt,
+      blockedUntil: count >= 5 ? now + 15 * 60_000 : undefined,
+    });
+  }
+
+  private clearFailedLogin(email: string, ipAddress?: string | null) {
+    this.loginAttempts.delete(this.buildAttemptKey(email, ipAddress));
+  }
+}

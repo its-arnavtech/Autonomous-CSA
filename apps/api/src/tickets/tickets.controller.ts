@@ -5,7 +5,7 @@ import {
   Param,
   Patch,
   Post,
-  Query,
+  UseGuards,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import {
@@ -17,19 +17,35 @@ import {
   TicketStatus,
   nextEventSequence,
 } from '@agentic-support/db';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Queue } from 'bullmq';
+import { ActorType } from '../auth/actor-type.constants';
+import { CurrentOrganization } from '../auth/current-organization.decorator';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type {
+  AuthenticatedUser,
+  TenantMembership,
+} from '../auth/authenticated-user.type';
+import { JwtAccessGuard } from '../auth/jwt-access.guard';
+import {
+  MUTATING_ORG_ROLES,
+  READ_ORG_ROLES,
+} from '../auth/organization-role.constants';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
+import { TenantContextGuard } from '../auth/tenant-context.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { SupportService } from '../support/support.service';
 import {
   CreateTicketDto,
-  OrgQueryDto,
   UpdateTicketPriorityDto,
   UpdateTicketStatusDto,
 } from './tickets.dto';
 import { CreateDraftDto } from '../drafts/drafts.dto';
 
 @ApiTags('tickets')
+@ApiBearerAuth()
+@UseGuards(JwtAccessGuard, TenantContextGuard, RolesGuard)
 @Controller('tickets')
 export class TicketsController {
   constructor(
@@ -40,35 +56,40 @@ export class TicketsController {
 
   @Get()
   @ApiOperation({ summary: 'List tickets for an organization inbox' })
-  async listTickets(@Query() query: OrgQueryDto) {
-    return this.supportService.listTickets(query.orgId ?? 'org_demo');
+  @Roles(...READ_ORG_ROLES)
+  async listTickets(
+    @CurrentOrganization() organization: TenantMembership,
+  ) {
+    return this.supportService.listTickets(organization.organizationId);
   }
 
   @Get(':id')
   @ApiOperation({
     summary: 'Get ticket detail, messages, latest run, and timeline',
   })
-  async getTicket(@Param('id') ticketId: string, @Query() query: OrgQueryDto) {
-    return this.supportService.getTicketDetail(
-      ticketId,
-      query.orgId ?? 'org_demo',
-    );
+  @Roles(...READ_ORG_ROLES)
+  async getTicket(
+    @Param('id') ticketId: string,
+    @CurrentOrganization() organization: TenantMembership,
+  ) {
+    return this.supportService.getTicketDetail(ticketId, organization.organizationId);
   }
 
   @Get(':id/approvals')
   @ApiOperation({ summary: 'List approvals for a ticket' })
+  @Roles(...READ_ORG_ROLES)
   async getTicketApprovals(
     @Param('id') ticketId: string,
-    @Query() query: OrgQueryDto,
+    @CurrentOrganization() organization: TenantMembership,
   ) {
-    const { organization } = await this.supportService.assertTicketAccess(
+    await this.supportService.assertTicketAccess(
       ticketId,
-      query.orgId ?? 'org_demo',
+      organization.organizationId,
     );
 
     return this.prisma.humanApproval.findMany({
       where: {
-        orgId: organization.id,
+        orgId: organization.organizationId,
         ticketId,
       },
       orderBy: [{ createdAt: 'desc' }],
@@ -80,40 +101,40 @@ export class TicketsController {
 
   @Get(':id/drafts')
   @ApiOperation({ summary: 'List drafts for a ticket' })
+  @Roles(...READ_ORG_ROLES)
   async getTicketDrafts(
     @Param('id') ticketId: string,
-    @Query() query: OrgQueryDto,
+    @CurrentOrganization() organization: TenantMembership,
   ) {
-    return this.supportService.listDrafts(ticketId, query.orgId ?? 'org_demo');
+    return this.supportService.listDrafts(ticketId, organization.organizationId);
   }
 
   @Get(':id/agent-steps')
   @ApiOperation({
     summary: 'List agent runtime steps for the latest run on a ticket',
   })
+  @Roles(...READ_ORG_ROLES)
   async getTicketAgentSteps(
     @Param('id') ticketId: string,
-    @Query() query: OrgQueryDto,
+    @CurrentOrganization() organization: TenantMembership,
   ) {
-    return this.supportService.getAgentSteps(
-      ticketId,
-      query.orgId ?? 'org_demo',
-    );
+    return this.supportService.getAgentSteps(ticketId, organization.organizationId);
   }
 
   @Get(':id/guardrails')
   @ApiOperation({ summary: 'List guardrail checks for a ticket' })
+  @Roles(...READ_ORG_ROLES)
   async getTicketGuardrails(
     @Param('id') ticketId: string,
-    @Query() query: OrgQueryDto,
+    @CurrentOrganization() organization: TenantMembership,
   ) {
-    const { organization } = await this.supportService.assertTicketAccess(
+    await this.supportService.assertTicketAccess(
       ticketId,
-      query.orgId ?? 'org_demo',
+      organization.organizationId,
     );
 
     return this.prisma.agentGuardrailCheck.findMany({
-      where: { orgId: organization.id, ticketId },
+      where: { orgId: organization.organizationId, ticketId },
       orderBy: [{ createdAt: 'desc' }],
     });
   }
@@ -122,29 +143,30 @@ export class TicketsController {
   @ApiOperation({
     summary: 'List knowledge retrieval traces for a ticket',
   })
+  @Roles(...READ_ORG_ROLES)
   async getTicketRetrievals(
     @Param('id') ticketId: string,
-    @Query() query: OrgQueryDto,
+    @CurrentOrganization() organization: TenantMembership,
   ) {
-    return this.supportService.getRetrievals(
-      ticketId,
-      query.orgId ?? 'org_demo',
-    );
+    return this.supportService.getRetrievals(ticketId, organization.organizationId);
   }
 
   @Post()
   @ApiOperation({
     summary: 'Create a ticket and enqueue the support worker job',
   })
-  async createTicket(@Body() dto: CreateTicketDto) {
-    const orgSlug = dto.orgId ?? 'org_demo';
-    const organization = await this.supportService.resolveOrganization(orgSlug);
+  @Roles(...MUTATING_ORG_ROLES)
+  async createTicket(
+    @Body() dto: CreateTicketDto,
+    @CurrentOrganization() organization: TenantMembership,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     const priority = dto.priority ?? TicketPriority.NORMAL;
 
     const result = await this.prisma.$transaction(async (tx) => {
       const ticket = await tx.ticket.create({
         data: {
-          orgId: organization.id,
+          orgId: organization.organizationId,
           subject: dto.subject,
           status: TicketStatus.OPEN,
           priority,
@@ -152,7 +174,7 @@ export class TicketsController {
           customerName: dto.customerName,
           messages: {
             create: {
-              orgId: organization.id,
+              orgId: organization.organizationId,
               direction: MessageDirection.INBOUND,
               body: dto.body,
             },
@@ -162,23 +184,31 @@ export class TicketsController {
 
       const run = await tx.agentRun.create({
         data: {
-          orgId: organization.id,
+          orgId: organization.organizationId,
           ticketId: ticket.id,
           status: AgentRunStatus.QUEUED,
           trigger: AgentRunTrigger.TICKET_CREATED,
         },
       });
 
-      const sequence = await nextEventSequence(tx, organization.id, ticket.id);
+      const sequence = await nextEventSequence(
+        tx,
+        organization.organizationId,
+        ticket.id,
+      );
 
       await tx.agentEvent.create({
         data: {
-          orgId: organization.id,
+          orgId: organization.organizationId,
           ticketId: ticket.id,
           runId: run.id,
           type: AgentEventType.RUN_QUEUED,
           sequence,
-          payload: { subject: dto.subject },
+          payload: {
+            subject: dto.subject,
+            actorType: ActorType.USER,
+            actorUserId: user.userId,
+          },
         },
       });
 
@@ -186,13 +216,14 @@ export class TicketsController {
     });
 
     const job = await this.queue.add('ticket.process', {
-      orgId: organization.id,
-      orgSlug,
+      orgId: organization.organizationId,
+      orgSlug: organization.organizationSlug,
       runId: result.run.id,
       ticketId: result.ticket.id,
       subject: dto.subject,
       body: dto.body,
       customerEmail: dto.customerEmail,
+      requestedByUserId: user.userId,
     });
 
     return { ticketId: result.ticket.id, enqueuedJobId: job.id };
@@ -200,36 +231,48 @@ export class TicketsController {
 
   @Patch(':id/status')
   @ApiOperation({ summary: 'Update a ticket status' })
+  @Roles(...MUTATING_ORG_ROLES)
   async updateTicketStatus(
     @Param('id') ticketId: string,
     @Body() dto: UpdateTicketStatusDto,
+    @CurrentOrganization() organization: TenantMembership,
   ) {
     return this.supportService.updateTicketStatus(
       ticketId,
-      dto.orgId,
+      organization.organizationId,
       dto.status,
     );
   }
 
   @Patch(':id/priority')
   @ApiOperation({ summary: 'Update a ticket priority' })
+  @Roles(...MUTATING_ORG_ROLES)
   async updateTicketPriority(
     @Param('id') ticketId: string,
     @Body() dto: UpdateTicketPriorityDto,
+    @CurrentOrganization() organization: TenantMembership,
   ) {
     return this.supportService.updateTicketPriority(
       ticketId,
-      dto.orgId,
+      organization.organizationId,
       dto.priority,
     );
   }
 
   @Post(':id/drafts')
   @ApiOperation({ summary: 'Create a manual outbound draft for a ticket' })
+  @Roles(...MUTATING_ORG_ROLES)
   async createTicketDraft(
     @Param('id') ticketId: string,
     @Body() dto: CreateDraftDto,
+    @CurrentOrganization() organization: TenantMembership,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.supportService.createManualDraft(ticketId, dto.orgId, dto.body);
+    return this.supportService.createManualDraft(
+      ticketId,
+      organization.organizationId,
+      dto.body,
+      user.userId,
+    );
   }
 }

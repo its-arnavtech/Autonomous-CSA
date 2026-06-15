@@ -1,17 +1,17 @@
+import { NextRequest } from 'next/server';
 import { getApiBaseUrl, proxyJsonRequest } from '../../_utils/proxy';
 
 type RouteContext = {
   params: { approvalId: string } | Promise<{ approvalId: string }>;
 };
 
-export async function PATCH(req: Request, { params }: RouteContext) {
+export async function PATCH(req: NextRequest, { params }: RouteContext) {
   const { approvalId } = await params;
-  const upstreamUrl = `${getApiBaseUrl()}/approvals/${encodeURIComponent(approvalId)}`;
 
   return proxyJsonRequest({
     req,
     method: 'PATCH',
-    upstreamUrl,
-    errorContext: 'Failed to update approval decision',
+    upstreamUrl: `${getApiBaseUrl()}/approvals/${encodeURIComponent(approvalId)}`,
+    errorContext: 'Failed to update approval',
   });
 }

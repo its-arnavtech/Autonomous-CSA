@@ -16,7 +16,6 @@ type ApprovalReviewCardProps = {
       status: string;
     } | null;
   };
-  orgId: string;
 };
 
 function approvalTone(status: string) {
@@ -30,7 +29,7 @@ function approvalTone(status: string) {
   }
 }
 
-export function ApprovalReviewCard({ approval, orgId }: ApprovalReviewCardProps) {
+export function ApprovalReviewCard({ approval }: ApprovalReviewCardProps) {
   const router = useRouter();
   const [reviewerNote, setReviewerNote] = useState(approval.reviewerNote ?? '');
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +46,6 @@ export function ApprovalReviewCard({ approval, orgId }: ApprovalReviewCardProps)
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
-            orgId,
             status,
             reviewerNote: reviewerNote.trim() || undefined,
           }),

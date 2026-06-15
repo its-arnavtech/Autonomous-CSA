@@ -23,7 +23,10 @@ type TicketProcessJob = {
   subject: string;
   body: string;
   customerEmail: string;
+  requestedByUserId?: string;
 };
+
+const AGENT_ACTOR = 'AGENT' as const;
 
 @Processor('support')
 export class SupportProcessor extends WorkerHost {
@@ -187,9 +190,11 @@ export class SupportProcessor extends WorkerHost {
             agentRunId: runId,
             body: draftBody,
             status: draftStatus,
-            createdBy: 'agent_stub',
-            approvedBy:
-              draftStatus === DraftStatus.APPROVED ? 'agent_stub' : null,
+            createdBy: 'agent',
+            createdByType: AGENT_ACTOR,
+            approvedBy: draftStatus === DraftStatus.APPROVED ? 'agent' : null,
+            approvedByType:
+              draftStatus === DraftStatus.APPROVED ? AGENT_ACTOR : null,
           },
         });
 
@@ -198,7 +203,11 @@ export class SupportProcessor extends WorkerHost {
           ticketId,
           runId,
           type: AgentEventType.DRAFT_CREATED,
-          payload: { draftId: draft.id, status: draft.status },
+          payload: {
+            draftId: draft.id,
+            status: draft.status,
+            actorType: AGENT_ACTOR,
+          },
         });
 
         // Branch on aggregate guardrail decision
@@ -265,7 +274,11 @@ export class SupportProcessor extends WorkerHost {
             ticketId,
             runId,
             type: AgentEventType.DRAFT_AUTO_APPROVED,
-            payload: { draftId: draft.id, status: DraftStatus.APPROVED },
+            payload: {
+              draftId: draft.id,
+              status: DraftStatus.APPROVED,
+              actorType: AGENT_ACTOR,
+            },
           });
         }
 
