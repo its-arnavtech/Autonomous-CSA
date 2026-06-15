@@ -1,7 +1,7 @@
 {
   "devDependencies": {
     "cross-env": "^10.1.0",
-    "turbo": "^2.8.3"
+    "turbo": "^2.9.18"
   },
   "name": "agentic-support-saas",
   "private": true,
