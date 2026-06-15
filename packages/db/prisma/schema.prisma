@@ -23,6 +23,7 @@ model Organization {
   memberships       OrganizationMembership[]
   knowledgeArticles   KnowledgeArticle[]
   knowledgeRetrievals KnowledgeRetrieval[]
+  operationalFailures OperationalFailure[]
 }
 
 model User {
@@ -40,6 +41,7 @@ model User {
   createdDrafts     OutboundDraft[] @relation("OutboundDraftCreatedByUser")
   approvedDrafts    OutboundDraft[] @relation("OutboundDraftApprovedByUser")
   sentDrafts        OutboundDraft[] @relation("OutboundDraftSentByUser")
+  resolvedOperationalFailures OperationalFailure[] @relation("OperationalFailureResolvedByUser")
 }
 
 model OrganizationMembership {
@@ -115,13 +117,20 @@ model AgentRun {
   id              String                @id @default(uuid())
   orgId           String
   ticketId        String
+  correlationId   String?
   status          AgentRunStatus
   trigger         AgentRunTrigger
+  queuedAt        DateTime              @default(now())
   startedAt       DateTime?
   finishedAt      DateTime?
+  durationMs      Int?
+  attemptCount    Int                   @default(0)
   totalCostCents  Int                   @default(0)
   errorCode       String?
   errorMessage    String?
+  lastErrorCode   String?
+  lastErrorMessage String?
+  failureStage    String?
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
   ticket          Ticket                @relation(fields: [ticketId], references: [id], onDelete: Cascade)
@@ -134,6 +143,8 @@ model AgentRun {
   guardrailChecks AgentGuardrailCheck[]
 
   @@index([ticketId])
+  @@index([correlationId])
+  @@index([orgId, status, createdAt])
 }
 
 model AgentStep {
@@ -152,6 +163,9 @@ model AgentStep {
   estimatedCostCents Int?
   startedAt          DateTime        @default(now())
   finishedAt         DateTime?
+  durationMs         Int?
+  retryCount         Int             @default(0)
+  errorCode          String?
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
   agentRun           AgentRun        @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
@@ -197,6 +211,7 @@ model AgentEvent {
   orgId        String
   ticketId     String
   runId        String?
+  correlationId String?
   type         AgentEventType
   sequence     Int
   payload      Json
@@ -209,6 +224,7 @@ model AgentEvent {
 
   @@index([ticketId])
   @@index([runId])
+  @@index([correlationId])
   @@index([orgId, ticketId, sequence])
 }
 
@@ -300,6 +316,33 @@ model AgentGuardrailCheck {
 
   @@index([orgId, ticketId, createdAt])
   @@index([agentRunId])
+}
+
+model OperationalFailure {
+  id                String        @id @default(uuid())
+  organizationId    String?
+  queueName         String
+  jobName           String
+  jobId             String?
+  correlationId     String?
+  ticketId          String?
+  runId             String?
+  errorCode         String
+  safeErrorMessage  String
+  attemptCount      Int
+  payloadSummaryJson Json?
+  failedAt          DateTime      @default(now())
+  resolvedAt        DateTime?
+  resolvedByUserId  String?
+  resolutionNote    String?
+  replayedJobId     String?
+  organization      Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  resolvedByUser    User?         @relation("OperationalFailureResolvedByUser", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, failedAt])
+  @@index([correlationId])
+  @@index([runId])
+  @@index([ticketId])
 }
 
 enum TicketStatus {

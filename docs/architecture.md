@@ -118,3 +118,9 @@ Phase 8 closes the earlier authorization gap where callers could supply arbitrar
 - Access tokens are short-lived.
 - Refresh tokens rotate and are stored hashed in Postgres.
 - Human actions now record real user ids.
+## Phase 9 additions
+
+- `packages/observability`: shared logging, correlation, redaction, error serialization, metric names, and timing helpers
+- API observability module: request logging, exception filter, metrics, readiness
+- Worker observability module: HTTP health/metrics plus structured processor logging
+- Operations module: tenant-scoped runs, failures, replay, resolve, audit search, and CSV export

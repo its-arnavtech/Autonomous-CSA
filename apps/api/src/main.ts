@@ -1,8 +1,11 @@
 import { ValidationPipe } from '@nestjs/common';
+import { bindCorrelationContext } from '@agentic-support/observability';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import type { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { apiLogger } from './observability/api-logger';
 
 function parseAllowedOrigins() {
   const raw = process.env.CORS_ALLOWED_ORIGINS?.trim();
@@ -20,12 +23,25 @@ function parseAllowedOrigins() {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true,
+    logger: apiLogger,
+  });
+  app.useLogger(apiLogger);
   app.use(helmet());
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    bindCorrelationContext(req, res, next);
+  });
   app.enableCors({
     origin: parseAllowedOrigins(),
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['content-type', 'authorization', 'x-organization-id'],
+    allowedHeaders: [
+      'content-type',
+      'authorization',
+      'x-organization-id',
+      'x-correlation-id',
+    ],
+    exposedHeaders: ['x-correlation-id'],
   });
   app.useGlobalPipes(
     new ValidationPipe({
@@ -58,6 +74,8 @@ async function bootstrap() {
     throw new Error(`Invalid PORT value: "${rawPort}"`);
   }
   await app.listen(port);
-  console.log(`API listening on http://localhost:${port}`);
+  apiLogger.log(`API listening on http://localhost:${port}`, {
+    port,
+  });
 }
 void bootstrap();

@@ -1,5 +1,6 @@
 import { ILlmProvider } from './llm-provider.interface';
 import { LLMRequest, LLMStructuredResponse } from './llm.types';
+import { calculateLlmCost } from './pricing';
 import { safeParseJson, truncateForLog } from './safe-json';
 
 type AnthropicContent = { type: 'text'; text: string };
@@ -10,11 +11,6 @@ type AnthropicResponse = {
   model: string;
   stop_reason: string;
 };
-
-// claude-haiku-4-5 pricing: ~$0.25/1M input, $1.25/1M output (approx mid-2025)
-function estimateCostCents(inputTokens: number, outputTokens: number): number {
-  return Math.ceil((inputTokens * 0.00025 + outputTokens * 0.00125) / 10);
-}
 
 export class AnthropicProvider implements ILlmProvider {
   readonly providerName = 'anthropic';
@@ -76,6 +72,12 @@ export class AnthropicProvider implements ILlmProvider {
 
     const inputTokens = json.usage?.input_tokens ?? 0;
     const outputTokens = json.usage?.output_tokens ?? 0;
+    const cost = calculateLlmCost({
+      provider: this.providerName,
+      model: resolvedModel,
+      inputTokens,
+      outputTokens,
+    });
 
     return {
       output,
@@ -86,7 +88,8 @@ export class AnthropicProvider implements ILlmProvider {
         inputTokens,
         outputTokens,
         totalTokens: inputTokens + outputTokens,
-        estimatedCostCents: estimateCostCents(inputTokens, outputTokens),
+        estimatedCostMicrounits: cost.estimatedCostMicrounits,
+        estimatedCostCents: cost.estimatedCostCents,
       },
       finishReason: json.stop_reason,
     };

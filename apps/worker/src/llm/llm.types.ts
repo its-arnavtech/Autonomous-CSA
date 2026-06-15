@@ -16,7 +16,8 @@ export type LLMUsage = {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
-  estimatedCostCents: number;
+  estimatedCostMicrounits: number | null;
+  estimatedCostCents: number | null;
 };
 
 export type LLMRequest = {

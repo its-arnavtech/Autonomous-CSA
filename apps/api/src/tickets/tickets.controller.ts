@@ -17,6 +17,7 @@ import {
   TicketStatus,
   nextEventSequence,
 } from '@agentic-support/db';
+import { getCorrelationContext } from '@agentic-support/observability';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Queue } from 'bullmq';
 import { ActorType } from '../auth/actor-type.constants';
@@ -36,6 +37,8 @@ import { RolesGuard } from '../auth/roles.guard';
 import { TenantContextGuard } from '../auth/tenant-context.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { SupportService } from '../support/support.service';
+import { MetricsService } from '../observability/metrics.service';
+import { SUPPORT_QUEUE_NAME } from '../queue/queue.config';
 import {
   CreateTicketDto,
   UpdateTicketPriorityDto,
@@ -49,9 +52,10 @@ import { CreateDraftDto } from '../drafts/drafts.dto';
 @Controller('tickets')
 export class TicketsController {
   constructor(
-    @InjectQueue('support') private readonly queue: Queue,
+    @InjectQueue(SUPPORT_QUEUE_NAME) private readonly queue: Queue,
     private readonly prisma: PrismaService,
     private readonly supportService: SupportService,
+    private readonly metrics: MetricsService,
   ) {}
 
   @Get()
@@ -162,6 +166,8 @@ export class TicketsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     const priority = dto.priority ?? TicketPriority.NORMAL;
+    const correlationId = getCorrelationContext()?.correlationId ?? null;
+    const queuedAt = new Date();
 
     const result = await this.prisma.$transaction(async (tx) => {
       const ticket = await tx.ticket.create({
@@ -186,8 +192,10 @@ export class TicketsController {
         data: {
           orgId: organization.organizationId,
           ticketId: ticket.id,
+          correlationId,
           status: AgentRunStatus.QUEUED,
           trigger: AgentRunTrigger.TICKET_CREATED,
+          queuedAt,
         },
       });
 
@@ -202,12 +210,14 @@ export class TicketsController {
           orgId: organization.organizationId,
           ticketId: ticket.id,
           runId: run.id,
+          correlationId,
           type: AgentEventType.RUN_QUEUED,
           sequence,
           payload: {
             subject: dto.subject,
             actorType: ActorType.USER,
             actorUserId: user.userId,
+            correlationId,
           },
         },
       });
@@ -215,16 +225,31 @@ export class TicketsController {
       return { ticket, run };
     });
 
-    const job = await this.queue.add('ticket.process', {
-      orgId: organization.organizationId,
-      orgSlug: organization.organizationSlug,
-      runId: result.run.id,
-      ticketId: result.ticket.id,
-      subject: dto.subject,
-      body: dto.body,
-      customerEmail: dto.customerEmail,
-      requestedByUserId: user.userId,
-    });
+    const job = await this.queue.add(
+      'ticket.process',
+      {
+        orgId: organization.organizationId,
+        orgSlug: organization.organizationSlug,
+        runId: result.run.id,
+        ticketId: result.ticket.id,
+        subject: dto.subject,
+        body: dto.body,
+        customerEmail: dto.customerEmail,
+        requestedByUserId: user.userId,
+        correlationId,
+        triggerType: AgentRunTrigger.TICKET_CREATED,
+        enqueuedAt: queuedAt.toISOString(),
+      },
+      {
+        jobId: `support-${result.run.id}`,
+      },
+    );
+
+    this.metrics.incrementQueueEnqueued(
+      'ticket.process',
+      AgentRunTrigger.TICKET_CREATED,
+    );
+    this.metrics.incrementAgentRun('queued', 'ticket_created');
 
     return { ticketId: result.ticket.id, enqueuedJobId: job.id };
   }

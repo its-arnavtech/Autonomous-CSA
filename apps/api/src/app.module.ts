@@ -4,8 +4,9 @@ import { AppService } from './app.service';
 import { ApprovalsModule } from './approvals/approvals.module';
 import { AuthModule } from './auth/auth.module';
 import { DraftsModule } from './drafts/drafts.module';
-import { HealthController } from './health.controller';
 import { KnowledgeModule } from './knowledge/knowledge.module';
+import { ObservabilityModule } from './observability/observability.module';
+import { OperationsModule } from './operations/operations.module';
 import { OrgsModule } from './orgs/orgs.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { QueueModule } from './queue/queue.module';
@@ -18,13 +19,15 @@ import { TicketsModule } from './tickets/tickets.module';
     SupportModule,
     AuthModule,
     QueueModule,
+    ObservabilityModule,
+    OperationsModule,
     TicketsModule,
     DraftsModule,
     OrgsModule,
     ApprovalsModule,
     KnowledgeModule,
   ],
-  controllers: [AppController, HealthController],
+  controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {}

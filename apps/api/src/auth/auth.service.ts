@@ -3,10 +3,13 @@ import {
   ConflictException,
   HttpException,
   HttpStatus,
+  Inject,
   Injectable,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma } from '@agentic-support/db';
+import { MetricsService } from '../observability/metrics.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PasswordService } from './password.service';
 import { OrganizationRole } from './organization-role.constants';
@@ -40,6 +43,19 @@ type SafeAuthResponse = {
 
 type SafeMeResponse = Omit<SafeAuthResponse, 'accessToken' | 'refreshToken'>;
 
+const noopMetrics = {
+  incrementAuthFailure: () => undefined,
+  incrementAuthLogin: () => undefined,
+  incrementAuthRefresh: () => undefined,
+  incrementAuthRegistration: () => undefined,
+} satisfies Pick<
+  MetricsService,
+  | 'incrementAuthFailure'
+  | 'incrementAuthLogin'
+  | 'incrementAuthRefresh'
+  | 'incrementAuthRegistration'
+>;
+
 @Injectable()
 export class AuthService {
   private readonly loginAttempts = new Map<
@@ -51,96 +67,105 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly passwordService: PasswordService,
     private readonly tokenService: TokenService,
+    @Optional()
+    @Inject(MetricsService)
+    private readonly metrics: MetricsService = noopMetrics as unknown as MetricsService,
   ) {}
 
   async register(dto: RegisterDto, metadata: RequestMetadata) {
-    const normalizedEmail = this.normalizeEmail(dto.email);
-    const organizationSlug = this.normalizeOrganizationSlug(
-      dto.organizationSlug ?? dto.organizationName,
-    );
+    try {
+      const normalizedEmail = this.normalizeEmail(dto.email);
+      const organizationSlug = this.normalizeOrganizationSlug(
+        dto.organizationSlug ?? dto.organizationName,
+      );
 
-    const [existingUser, existingOrganization] = await Promise.all([
-      this.prisma.user.findUnique({
-        where: { normalizedEmail },
-        select: { id: true },
-      }),
-      this.prisma.organization.findUnique({
-        where: { slug: organizationSlug },
-        select: { id: true },
-      }),
-    ]);
+      const [existingUser, existingOrganization] = await Promise.all([
+        this.prisma.user.findUnique({
+          where: { normalizedEmail },
+          select: { id: true },
+        }),
+        this.prisma.organization.findUnique({
+          where: { slug: organizationSlug },
+          select: { id: true },
+        }),
+      ]);
 
-    if (existingUser) {
-      throw new ConflictException('Email is already in use');
+      if (existingUser) {
+        throw new ConflictException('Email is already in use');
+      }
+
+      if (existingOrganization) {
+        throw new ConflictException('Organization slug is already in use');
+      }
+
+      const passwordHash = await this.passwordService.hashPassword(dto.password);
+      const userId = randomUUID();
+      const organizationId = randomUUID();
+      const membershipId = randomUUID();
+      const sessionId = randomUUID();
+      const refreshToken = this.tokenService.createRefreshToken(userId, sessionId);
+      const refreshPayload = this.tokenService.verifyRefreshToken(refreshToken);
+      const accessToken = this.tokenService.createAccessToken({
+        id: userId,
+        email: normalizedEmail,
+      });
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.user.create({
+          data: {
+            id: userId,
+            email: normalizedEmail,
+            normalizedEmail,
+            passwordHash,
+            displayName: dto.displayName?.trim() || null,
+          },
+        });
+
+        await tx.organization.create({
+          data: {
+            id: organizationId,
+            name: dto.organizationName.trim(),
+            slug: organizationSlug,
+          },
+        });
+
+        await tx.organizationSettings.create({
+          data: { orgId: organizationId },
+        });
+
+        await tx.organizationMembership.create({
+          data: {
+            id: membershipId,
+            userId,
+            organizationId,
+            role: OrganizationRole.OWNER,
+          },
+        });
+
+        await tx.refreshSession.create({
+          data: {
+            id: sessionId,
+            userId,
+            tokenHash: this.tokenService.hashRefreshToken(refreshToken),
+            expiresAt: this.tokenService.getRefreshExpiry(refreshPayload.exp),
+            userAgent: metadata.userAgent ?? null,
+            ipAddress: metadata.ipAddress ?? null,
+          },
+        });
+      });
+
+      const profile = await this.getMe(userId);
+      this.metrics.incrementAuthRegistration('success');
+
+      return {
+        ...profile,
+        accessToken,
+        refreshToken,
+      };
+    } catch (error) {
+      this.metrics.incrementAuthRegistration('validation_error');
+      throw error;
     }
-
-    if (existingOrganization) {
-      throw new ConflictException('Organization slug is already in use');
-    }
-
-    const passwordHash = await this.passwordService.hashPassword(dto.password);
-    const userId = randomUUID();
-    const organizationId = randomUUID();
-    const membershipId = randomUUID();
-    const sessionId = randomUUID();
-    const refreshToken = this.tokenService.createRefreshToken(userId, sessionId);
-    const refreshPayload = this.tokenService.verifyRefreshToken(refreshToken);
-    const accessToken = this.tokenService.createAccessToken({
-      id: userId,
-      email: normalizedEmail,
-    });
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.user.create({
-        data: {
-          id: userId,
-          email: normalizedEmail,
-          normalizedEmail,
-          passwordHash,
-          displayName: dto.displayName?.trim() || null,
-        },
-      });
-
-      await tx.organization.create({
-        data: {
-          id: organizationId,
-          name: dto.organizationName.trim(),
-          slug: organizationSlug,
-        },
-      });
-
-      await tx.organizationSettings.create({
-        data: { orgId: organizationId },
-      });
-
-      await tx.organizationMembership.create({
-        data: {
-          id: membershipId,
-          userId,
-          organizationId,
-          role: OrganizationRole.OWNER,
-        },
-      });
-
-      await tx.refreshSession.create({
-        data: {
-          id: sessionId,
-          userId,
-          tokenHash: this.tokenService.hashRefreshToken(refreshToken),
-          expiresAt: this.tokenService.getRefreshExpiry(refreshPayload.exp),
-          userAgent: metadata.userAgent ?? null,
-          ipAddress: metadata.ipAddress ?? null,
-        },
-      });
-    });
-
-    const profile = await this.getMe(userId);
-
-    return {
-      ...profile,
-      accessToken,
-      refreshToken,
-    };
   }
 
   async login(dto: LoginDto, metadata: RequestMetadata) {
@@ -159,6 +184,7 @@ export class AuthService {
 
     if (!user || !user.isActive) {
       this.recordFailedLogin(normalizedEmail, metadata.ipAddress);
+      this.metrics.incrementAuthFailure('login', 'auth_error');
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -169,6 +195,7 @@ export class AuthService {
 
     if (!passwordMatches) {
       this.recordFailedLogin(normalizedEmail, metadata.ipAddress);
+      this.metrics.incrementAuthFailure('login', 'auth_error');
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -194,6 +221,7 @@ export class AuthService {
     });
 
     const profile = await this.getMe(user.id);
+    this.metrics.incrementAuthLogin('success');
 
     return {
       ...profile,
@@ -208,6 +236,7 @@ export class AuthService {
     try {
       payload = this.tokenService.verifyRefreshToken(refreshToken);
     } catch {
+      this.metrics.incrementAuthRefresh('auth_error');
       throw new UnauthorizedException('Invalid refresh token');
     }
 
@@ -230,11 +259,13 @@ export class AuthService {
       existingSession.expiresAt.getTime() <= Date.now() ||
       !existingSession.user.isActive
     ) {
+      this.metrics.incrementAuthRefresh('auth_error');
       throw new UnauthorizedException('Invalid refresh token');
     }
 
     const expectedHash = this.tokenService.hashRefreshToken(refreshToken);
     if (expectedHash !== existingSession.tokenHash) {
+      this.metrics.incrementAuthRefresh('auth_error');
       throw new UnauthorizedException('Invalid refresh token');
     }
 
@@ -272,6 +303,7 @@ export class AuthService {
     });
 
     const profile = await this.getMe(existingSession.user.id);
+    this.metrics.incrementAuthRefresh('success');
 
     return {
       ...profile,
@@ -409,6 +441,7 @@ export class AuthService {
     const key = this.buildAttemptKey(email, ipAddress);
     const existing = this.loginAttempts.get(key);
     if (existing?.blockedUntil && existing.blockedUntil > Date.now()) {
+      this.metrics.incrementAuthFailure('login', 'rate_limited');
       throw new HttpException(
         'Too many login attempts. Please try again later.',
         HttpStatus.TOO_MANY_REQUESTS,

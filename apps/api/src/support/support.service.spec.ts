@@ -111,6 +111,7 @@ describe('SupportService', () => {
 
     expect(tx.agentEvent.create).toHaveBeenCalledWith({
       data: {
+        correlationId: null,
         orgId: 'org_1',
         ticketId: 'ticket_1',
         type: AgentEventType.TICKET_STATUS_CHANGED,
@@ -166,6 +167,7 @@ describe('SupportService', () => {
     });
     expect(tx.agentEvent.create).toHaveBeenCalledWith({
       data: {
+        correlationId: null,
         orgId: 'org_1',
         ticketId: 'ticket_1',
         runId: undefined,
@@ -327,6 +329,27 @@ describe('SupportService', () => {
     await expect(
       service.sendDraft('draft_1', 'org_1', 'user_1'),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('does not duplicate outbound effects for an already sent draft', async () => {
+    const { prisma, service } = createService();
+
+    prisma.organization.findUnique.mockResolvedValue({
+      id: 'org_1',
+      slug: 'org_demo',
+    });
+    prisma.outboundDraft.findFirst.mockResolvedValue({
+      id: 'draft_1',
+      orgId: 'org_1',
+      ticketId: 'ticket_1',
+      status: DraftStatus.SENT,
+      approvals: [],
+    });
+
+    await expect(
+      service.sendDraft('draft_1', 'org_1', 'user_1'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.ticketMessage.create).not.toHaveBeenCalled();
   });
 
   it('prevents wrong org access to a draft', async () => {

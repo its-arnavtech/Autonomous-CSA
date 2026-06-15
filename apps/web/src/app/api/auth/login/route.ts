@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  CORRELATION_ID_HEADER,
   clearAuthCookies,
   getForwardedHeaders,
   getApiBaseUrl,
+  resolveCorrelationId,
   setAuthCookies,
 } from '../../_utils/proxy';
+import { webLogger } from '../../_utils/web-logger';
 
 export async function POST(req: NextRequest) {
+  const correlationId = resolveCorrelationId(req);
   try {
     const headers = getForwardedHeaders(req);
     headers.set('content-type', 'application/json');
@@ -23,7 +27,11 @@ export async function POST(req: NextRequest) {
     if (!response.ok) {
       return new NextResponse(body || '{"error":"Login failed"}', {
         status: response.status,
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          [CORRELATION_ID_HEADER]:
+            response.headers.get(CORRELATION_ID_HEADER) ?? correlationId,
+        },
       });
     }
 
@@ -37,11 +45,21 @@ export async function POST(req: NextRequest) {
       user: payload.user,
       memberships: payload.memberships,
     });
+    nextResponse.headers.set(
+      CORRELATION_ID_HEADER,
+      response.headers.get(CORRELATION_ID_HEADER) ?? correlationId,
+    );
     setAuthCookies(nextResponse, payload, payload.memberships[0]?.organizationId);
     return nextResponse;
   } catch (error) {
-    console.error('[auth/login] proxy failed', error);
-    const response = NextResponse.json({ error: 'Login failed' }, { status: 502 });
+    webLogger.error('Login proxy failed', error, { correlationId });
+    const response = NextResponse.json(
+      { error: 'Login failed', correlationId },
+      {
+        status: 502,
+        headers: { [CORRELATION_ID_HEADER]: correlationId },
+      },
+    );
     clearAuthCookies(response);
     return response;
   }

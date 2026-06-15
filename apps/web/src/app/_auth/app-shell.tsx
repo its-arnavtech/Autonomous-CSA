@@ -28,6 +28,9 @@ export function AppShell({
               <Link href="/settings" className="font-medium text-slate-700">
                 Settings
               </Link>
+              <Link href="/operations" className="font-medium text-slate-700">
+                Operations
+              </Link>
             </div>
             <div>
               <h1 className="text-xl font-semibold tracking-tight">
