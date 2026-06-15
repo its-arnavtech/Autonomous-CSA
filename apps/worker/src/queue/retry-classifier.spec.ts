@@ -46,4 +46,14 @@ describe('retry classifier', () => {
     expect(result.metricOutcome).toBe('configuration_error');
     expect(result.useUnrecoverableError).toBe(true);
   });
+
+  it('treats invalid provider credentials as configuration errors', () => {
+    const result = classifyRetryableError(
+      new Error('OpenAI API error 401: invalid_api_key'),
+    );
+
+    expect(result.disposition).toBe('CONFIGURATION_ERROR');
+    expect(result.retryable).toBe(false);
+    expect(result.metricOutcome).toBe('configuration_error');
+  });
 });
