@@ -2,6 +2,7 @@ import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import {
   buildPostgresEnv,
+  assertPostgresToolCompatibility,
   getPgRestoreCommand,
   isProductionLikeDatabase,
   parseArgs,
@@ -53,6 +54,11 @@ async function main() {
   const checksum = await verifyChecksumFile(backupPath);
   const pgRestorePath =
     flags.get('pg-restore-path') ?? getPgRestoreCommand();
+  const compatibility = await assertPostgresToolCompatibility({
+    databaseUrl: targetDatabaseUrl,
+    operation: 'restore',
+    pgRestorePath,
+  });
 
   await runCommand(
     pgRestorePath,
@@ -71,6 +77,7 @@ async function main() {
         backupPath,
         target: parseDatabaseUrl(targetDatabaseUrl).safeDisplay,
         checksum,
+        postgresCompatibility: compatibility,
       },
       null,
       2,

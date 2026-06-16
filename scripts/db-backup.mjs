@@ -1,6 +1,7 @@
 import { join, resolve } from 'node:path';
 import {
   buildPostgresEnv,
+  assertPostgresToolCompatibility,
   createBackupMetadata,
   ensureDirectory,
   getGitSha,
@@ -41,6 +42,11 @@ async function main() {
 
   const database = parseDatabaseUrl(databaseUrl);
   await ensureDirectory(outputDirectory);
+  const compatibility = await assertPostgresToolCompatibility({
+    databaseUrl,
+    operation: 'backup',
+    pgDumpPath,
+  });
 
   const baseName = `autonomous-csa-${database.databaseName}-${getTimestamp()}`;
   const backupPath = join(outputDirectory, `${baseName}.dump`);
@@ -64,6 +70,7 @@ async function main() {
     databaseUrl,
     migrationCount: await getMigrationCount(),
     checksum,
+    postgresVersions: compatibility,
   }));
 
   const removed = await pruneOldBackups(outputDirectory, retentionDays);
@@ -76,6 +83,7 @@ async function main() {
         checksum,
         retentionDays,
         removed,
+        postgresCompatibility: compatibility,
       },
       null,
       2,

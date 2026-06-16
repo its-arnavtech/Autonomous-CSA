@@ -34,6 +34,8 @@ export function getPnpmCommand() {
 export function getWorkspacePrismaCommand() {
   return resolve(
     projectRoot,
+    'packages',
+    'db',
     'node_modules',
     '.bin',
     process.platform === 'win32' ? 'prisma.cmd' : 'prisma',
@@ -124,13 +126,137 @@ export function buildPostgresEnv(databaseUrl, overrides = {}) {
 }
 
 export function createBackupMetadata(input) {
-  return {
+  const metadata = {
     timestamp: input.timestamp,
     appVersion: input.appVersion,
     gitSha: input.gitSha,
     database: parseDatabaseUrl(input.databaseUrl).safeDisplay,
     migrationCount: input.migrationCount,
     checksum: input.checksum,
+  };
+
+  if (input.postgresVersions) {
+    metadata.postgresVersions = input.postgresVersions;
+  }
+
+  return metadata;
+}
+
+export function parsePostgresMajorVersion(output, label = 'PostgreSQL version') {
+  const text = String(output ?? '').trim();
+  const match = text.match(/(?:PostgreSQL\)?\s+|^)(\d+)(?:\.\d+)?/i);
+  const major = match ? Number.parseInt(match[1], 10) : Number.NaN;
+
+  if (!Number.isInteger(major) || major <= 0) {
+    throw new Error(`Could not parse ${label} major version from "${text || '<empty>'}"`);
+  }
+
+  return major;
+}
+
+export function evaluatePostgresToolCompatibility({ serverMajor, toolMajor, toolName }) {
+  if (!Number.isInteger(serverMajor) || serverMajor <= 0) {
+    throw new Error(`Invalid PostgreSQL server major version: ${serverMajor}`);
+  }
+  if (!Number.isInteger(toolMajor) || toolMajor <= 0) {
+    throw new Error(`Invalid ${toolName} major version: ${toolMajor}`);
+  }
+
+  if (toolMajor < serverMajor) {
+    throw new Error(
+      `${toolName} major version ${toolMajor} is older than PostgreSQL server major version ${serverMajor}. ` +
+        `Use PostgreSQL ${serverMajor} or newer client tools, for example by setting the matching *_PATH environment variable.`,
+    );
+  }
+
+  if (toolMajor > serverMajor) {
+    return `${toolName} major version ${toolMajor} is newer than PostgreSQL server major version ${serverMajor}; this is allowed for logical backup/restore tooling, but matching major-version client tools are recommended.`;
+  }
+
+  return null;
+}
+
+export async function detectPostgresClientMajorVersion(command, options = {}) {
+  const { stdout } = await runCommand(command, ['--version'], {
+    capture: true,
+    executableName: options.executableName ?? command,
+    overrideEnvVar: options.overrideEnvVar,
+  });
+  const output = stdout.trim();
+  return {
+    output,
+    major: parsePostgresMajorVersion(output, options.executableName ?? command),
+  };
+}
+
+export async function detectPostgresServerMajorVersion(databaseUrl, psqlPath = getPsqlCommand()) {
+  const { stdout } = await runCommand(
+    psqlPath,
+    ['-tAc', 'SHOW server_version;'],
+    {
+      env: buildPostgresEnv(databaseUrl),
+      capture: true,
+      executableName: 'psql',
+      overrideEnvVar: 'PSQL_PATH',
+    },
+  );
+  const output = stdout.trim();
+  return {
+    output,
+    major: parsePostgresMajorVersion(output, 'PostgreSQL server'),
+  };
+}
+
+export async function assertPostgresToolCompatibility({
+  databaseUrl,
+  operation,
+  pgDumpPath = getPgDumpCommand(),
+  pgRestorePath = getPgRestoreCommand(),
+  psqlPath = getPsqlCommand(),
+} = {}) {
+  if (!databaseUrl) {
+    throw new Error('databaseUrl is required for PostgreSQL client/server compatibility checks');
+  }
+
+  const server = await detectPostgresServerMajorVersion(databaseUrl, psqlPath);
+  const tools = {
+    psql: await detectPostgresClientMajorVersion(psqlPath, {
+      executableName: 'psql',
+      overrideEnvVar: 'PSQL_PATH',
+    }),
+  };
+
+  if (operation === 'backup') {
+    tools.pgDump = await detectPostgresClientMajorVersion(pgDumpPath, {
+      executableName: 'pg_dump',
+      overrideEnvVar: 'PG_DUMP_PATH',
+    });
+  } else if (operation === 'restore' || operation === 'verify') {
+    tools.pgRestore = await detectPostgresClientMajorVersion(pgRestorePath, {
+      executableName: 'pg_restore',
+      overrideEnvVar: 'PG_RESTORE_PATH',
+    });
+  } else {
+    throw new Error(`Unknown PostgreSQL compatibility operation: ${operation}`);
+  }
+
+  const warnings = [];
+  for (const [toolName, tool] of Object.entries(tools)) {
+    const warning = evaluatePostgresToolCompatibility({
+      serverMajor: server.major,
+      toolMajor: tool.major,
+      toolName,
+    });
+    if (warning) {
+      warnings.push(warning);
+    }
+  }
+
+  return {
+    operation,
+    server,
+    tools,
+    warnings,
   };
 }
 

@@ -1,5 +1,7 @@
+import { join } from 'node:path';
 import {
   assertTableExists,
+  assertPostgresToolCompatibility,
   buildPostgresEnv,
   countTableRows,
   createTempDatabaseName,
@@ -8,12 +10,29 @@ import {
   getWorkspacePrismaCommand,
   parseArgs,
   parseDatabaseUrl,
+  projectRoot,
   runCommand,
   verifyChecksumFile,
   withDatabaseName,
 } from './lib/postgres-tools.mjs';
 
-const TABLES_TO_CHECK = ['Ticket', 'TicketMessage', 'AgentRun', 'AgentEvent'];
+const TABLES_TO_CHECK = [
+  'Organization',
+  'User',
+  'OrganizationMembership',
+  'Ticket',
+  'TicketMessage',
+  'AgentRun',
+  'AgentStep',
+  'AgentEvent',
+  'OutboundDraft',
+  'HumanApproval',
+  'KnowledgeArticle',
+  'KnowledgeRetrieval',
+  'AgentGuardrailCheck',
+  'OperationalFailure',
+  'RefreshSession',
+];
 
 async function createTempDatabase(adminUrl, databaseName) {
   const env = buildPostgresEnv(adminUrl);
@@ -78,7 +97,7 @@ async function runPrismaValidation(databaseUrl) {
       'prisma/schema.prisma',
     ],
     {
-      cwd: 'C:\\Autonomous-CSA\\packages\\db',
+      cwd: join(projectRoot, 'packages', 'db'),
       env: {
         ...process.env,
         DATABASE_URL: databaseUrl,
@@ -111,6 +130,10 @@ async function main() {
   const tempDatabaseUrl = withDatabaseName(sourceDatabaseUrl, tempDatabaseName);
 
   await verifyChecksumFile(backupPath);
+  const compatibility = await assertPostgresToolCompatibility({
+    databaseUrl: sourceDatabaseUrl,
+    operation: 'verify',
+  });
   await createTempDatabase(adminDatabaseUrl, tempDatabaseName);
 
   try {
@@ -133,6 +156,7 @@ async function main() {
           backupPath,
           tempDatabase: parseDatabaseUrl(tempDatabaseUrl).safeDisplay,
           counts,
+          postgresCompatibility: compatibility,
         },
         null,
         2,

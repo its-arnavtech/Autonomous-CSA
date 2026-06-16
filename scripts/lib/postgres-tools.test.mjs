@@ -8,9 +8,12 @@ import { tmpdir } from 'node:os';
 import {
   createBackupMetadata,
   createTempDatabaseName,
+  detectPostgresClientMajorVersion,
+  evaluatePostgresToolCompatibility,
   getPgDumpCommand,
   getPgRestoreCommand,
   getPsqlCommand,
+  parsePostgresMajorVersion,
   getTimestamp,
   isProductionLikeDatabase,
   parseDatabaseUrl,
@@ -83,6 +86,72 @@ test('backup metadata uses a redacted database display value', () => {
   });
 });
 
+test('backup metadata records PostgreSQL compatibility details when provided', () => {
+  const metadata = createBackupMetadata({
+    timestamp: '2026-06-15T00:00:00.000Z',
+    appVersion: 'phase10',
+    gitSha: 'abc123',
+    databaseUrl: 'postgresql://user:super-secret@example.com:5432/app_db',
+    migrationCount: 10,
+    checksum: 'checksum',
+    postgresVersions: {
+      server: { major: 18, output: '18.0' },
+      tools: { pgDump: { major: 18, output: 'pg_dump (PostgreSQL) 18.0' } },
+      warnings: [],
+    },
+  });
+
+  assert.equal(metadata.postgresVersions.server.major, 18);
+  assert.equal(metadata.database, 'postgresql://user@example.com:5432/app_db');
+});
+
+test('PostgreSQL version parsing handles server and client output', () => {
+  assert.equal(parsePostgresMajorVersion('18.0'), 18);
+  assert.equal(parsePostgresMajorVersion('PostgreSQL 16.13 on x86_64-pc-linux-musl'), 16);
+  assert.equal(parsePostgresMajorVersion('pg_restore (PostgreSQL) 18.0'), 18);
+});
+
+test('PostgreSQL version parsing rejects malformed output', () => {
+  assert.throws(
+    () => parsePostgresMajorVersion('not a postgres version'),
+    /Could not parse/,
+  );
+});
+
+test('PostgreSQL compatibility accepts matching server 18 and client 18', () => {
+  assert.equal(
+    evaluatePostgresToolCompatibility({
+      serverMajor: 18,
+      toolMajor: 18,
+      toolName: 'pg_dump',
+    }),
+    null,
+  );
+});
+
+test('PostgreSQL compatibility accepts newer client 18 against server 16 with warning', () => {
+  assert.match(
+    evaluatePostgresToolCompatibility({
+      serverMajor: 16,
+      toolMajor: 18,
+      toolName: 'pg_dump',
+    }),
+    /newer than PostgreSQL server/,
+  );
+});
+
+test('PostgreSQL compatibility rejects older client 16 against server 18', () => {
+  assert.throws(
+    () =>
+      evaluatePostgresToolCompatibility({
+        serverMajor: 18,
+        toolMajor: 16,
+        toolName: 'pg_restore',
+      }),
+    /older than PostgreSQL server major version 18/,
+  );
+});
+
 test('temporary database names stay bounded and deterministic', () => {
   const name = createTempDatabaseName(12345678901234567890n);
   assert.match(name, /^autonomous_restore_verify_[0-9a-z]+$/);
@@ -121,6 +190,17 @@ test('runCommand surfaces actionable missing executable hints', async () => {
         overrideEnvVar: 'PG_DUMP_PATH',
       }),
     /PG_DUMP_PATH/,
+  );
+});
+
+test('PostgreSQL version detection surfaces missing executable hints', async () => {
+  await assert.rejects(
+    () =>
+      detectPostgresClientMajorVersion('definitely-missing-psql.exe', {
+        executableName: 'psql',
+        overrideEnvVar: 'PSQL_PATH',
+      }),
+    /PSQL_PATH/,
   );
 });
 
