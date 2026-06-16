@@ -5,15 +5,19 @@ services:
       - "6379:6379"
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: agentic_support
+      PGDATA: /var/lib/postgresql/18/docker
     ports:
       - "5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      # PostgreSQL 18 uses version-specific PGDATA under /var/lib/postgresql.
+      # Keep the old autonomous-csa_postgres-data PostgreSQL 16 volume intact
+      # until the PostgreSQL 18 migration is signed off and its retention window expires.
+      - postgres-data-v18:/var/lib/postgresql
 
 volumes:
-  postgres-data:
+  postgres-data-v18:
