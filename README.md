@@ -46,6 +46,8 @@ GitHub Actions now cover quality checks, Prisma migration validation, security s
 
 ## Phase 10 Hardening
 
+Local Docker infrastructure now uses PostgreSQL 18 for the `postgres` service. PostgreSQL 18 stores data under a version-specific `PGDATA` path (`/var/lib/postgresql/18/docker`) and the Compose volume is mounted at `/var/lib/postgresql` through the new `postgres-data-v18` volume. The previous PostgreSQL 16 volume is intentionally retained as a temporary rollback source until migration sign-off and the agreed retention window have both completed.
+
 Operational hardening commands:
 
 - `pnpm db:migrate:check`

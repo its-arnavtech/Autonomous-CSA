@@ -58,4 +58,5 @@ Validation run from `C:\Autonomous-CSA` during the Phase 8 closeout.
 ## Phase 10
 
 - Production hardening is implemented on `prod-hardening`, including runtime config validation, graceful shutdown, distributed rate limiting, backup/restore tooling, retention cleanup, Docker hardening, migration safety checks, CI hardening, and runbooks.
+- Local and CI database infrastructure now targets PostgreSQL 18, with a new PostgreSQL 18 volume layout and the old PostgreSQL 16 Docker volume retained for temporary rollback until migration sign-off.
 - The branch is not yet fully marked complete in this status file because merge readiness still depends on the latest verified backup/restore drill, live load/shutdown/outage drills, and final branch push state.

@@ -15,6 +15,7 @@
 - Restore verifies checksum before running `pg_restore`.
 - Restore refuses production-like targets unless `--allow-production=true` is supplied.
 - Verification creates a temporary database, restores the dump, runs Prisma migration status, checks required tables, compares selected row counts, and drops the temp database unless preserve mode is used.
+- Backup, restore, and verification run a PostgreSQL client/server major-version preflight before touching data.
 
 ## Environment
 
@@ -35,6 +36,17 @@
 - These overrides accept absolute paths with spaces, for example a PostgreSQL `bin` directory under `C:\Program Files\...`.
 - Missing executable errors now name the missing command and the supported override variable instead of failing with a generic Windows spawn error.
 
+## PostgreSQL 18 Client Compatibility
+
+- Local and CI PostgreSQL infrastructure use PostgreSQL 18.
+- Recommended local Windows tools:
+  - `C:\Program Files\PostgreSQL\18\bin\pg_dump.exe`
+  - `C:\Program Files\PostgreSQL\18\bin\pg_restore.exe`
+  - `C:\Program Files\PostgreSQL\18\bin\psql.exe`
+- `pg_dump`, `pg_restore`, and `psql` must not be older than the target server major version. For example, PostgreSQL 16 clients are rejected against a PostgreSQL 18 server.
+- Newer client tools against an older server are allowed for this logical backup/restore workflow, with a warning. Matching major-version tools are still preferred.
+- Backup metadata now records the detected server and client versions when the helper can reach the target database.
+
 ## Operational Guidance
 
 - Backup frequency: at least daily for staging-like environments.
@@ -50,6 +62,7 @@
 
 - The verification helpers now accept `PG_DUMP_PATH`, `PG_RESTORE_PATH`, and `PSQL_PATH` overrides so Windows operators can point at explicit PostgreSQL client binaries instead of relying on `PATH`.
 - If PostgreSQL client binaries are only available inside a container or platform package, wrap them with an explicit host-side command path rather than weakening checksum or restore safety checks.
+- PostgreSQL 18 Docker images use `/var/lib/postgresql/18/docker` as the effective default `PGDATA`; mount persistent volumes at `/var/lib/postgresql`, not `/var/lib/postgresql/data`.
 
 ## Current Verification Status
 

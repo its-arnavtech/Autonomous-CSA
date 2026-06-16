@@ -13,6 +13,34 @@
 - Run `pnpm db:migrate:deploy` against a staging-like database
 - Verify app compatibility with both pre- and post-migration states when possible
 - Keep seed behavior safe for local and CI use only
+- For PostgreSQL major-version upgrades, use logical dump and restore into a clean new volume. Do not reuse an older major-version data directory.
+
+## PostgreSQL 18 Local Infrastructure Migration
+
+- Local Docker Compose now uses `postgres:18-alpine`.
+- The PostgreSQL 18 volume is `postgres-data-v18`, which Docker names `autonomous-csa_postgres-data-v18`.
+- The PostgreSQL 18 volume is mounted at `/var/lib/postgresql`.
+- `PGDATA` is set to `/var/lib/postgresql/18/docker`, matching the PostgreSQL 18 Docker image layout.
+- The previous PostgreSQL 16 volume, `autonomous-csa_postgres-data`, is intentionally retained and must not be removed during the migration task.
+- The migration path is verified logical dump and restore: validate checksum, restore into a clean PostgreSQL 18 database, compare selected table counts, run Prisma checks, create a fresh PostgreSQL 18 backup, and verify restoring that fresh backup.
+
+### PostgreSQL 16 Volume Cleanup Criteria
+
+Do not remove `autonomous-csa_postgres-data` until all of the following are true:
+
+- PostgreSQL 18 restore has passed without errors.
+- A fresh PostgreSQL 18 backup has been created and restore-verified.
+- Phase 8 auth/tenant checks, Phase 9 observability/operations checks, and core ticket-processing checks have passed.
+- The migration branch has been merged.
+- A separate retention window has elapsed.
+
+When those criteria are satisfied, an operator may remove the old volume manually:
+
+```powershell
+docker volume rm autonomous-csa_postgres-data
+```
+
+Do not run that command as part of the migration.
 
 ## Heuristic Checks
 
@@ -36,3 +64,16 @@
 
 - Prefer restore-forward over hand-editing applied migrations.
 - If a migration must be reverted, restore from a verified backup and redeploy a compatible application build.
+
+### PostgreSQL 18 To PostgreSQL 16 Local Rollback
+
+Rollback is intended only before accepting PostgreSQL 18-only writes.
+
+1. Stop application writers: API, worker, and web.
+2. Stop the PostgreSQL 18 Compose service without deleting volumes.
+3. Restore Compose configuration to the PostgreSQL 16 image and reattach the preserved `autonomous-csa_postgres-data` volume at `/var/lib/postgresql/data`.
+4. Start PostgreSQL 16.
+5. Verify PostgreSQL 16 reports version 16 and selected table counts match the pre-migration source counts.
+6. Restart the compatible application stack.
+
+Once new writes occur on PostgreSQL 18, the old PostgreSQL 16 volume becomes stale. Rolling back after that point requires a fresh logical export compatible with PostgreSQL 16, and may not be safe if PostgreSQL 18-only features or incompatible dump output are present. The old volume is a short-term rollback source, not a permanent backup.
