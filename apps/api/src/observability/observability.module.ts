@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { HealthController } from '../health.controller';
+import { ApiShutdownStateService } from '../runtime/api-shutdown-state.service';
 import { ApiExceptionFilter } from './api-exception.filter';
 import { HealthService } from './health.service';
 import { HttpLoggingInterceptor } from './http-logging.interceptor';
@@ -10,6 +11,7 @@ import { MetricsService } from './metrics.service';
 @Module({
   controllers: [HealthController, MetricsController],
   providers: [
+    ApiShutdownStateService,
     HealthService,
     MetricsService,
     {
@@ -21,6 +23,6 @@ import { MetricsService } from './metrics.service';
       useClass: HttpLoggingInterceptor,
     },
   ],
-  exports: [MetricsService],
+  exports: [ApiShutdownStateService, MetricsService],
 })
 export class ObservabilityModule {}

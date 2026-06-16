@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { PrismaModule } from '../prisma.module';
+import { WorkerShutdownStateService } from '../runtime/worker-shutdown-state.service';
 import { HealthController } from './health.controller';
 import { HealthService } from './health.service';
 import { WorkerExceptionFilter } from './exception.filter';
@@ -12,6 +13,7 @@ import { MetricsService } from './metrics.service';
   imports: [PrismaModule],
   controllers: [HealthController, MetricsController],
   providers: [
+    WorkerShutdownStateService,
     HealthService,
     MetricsService,
     {
@@ -23,6 +25,6 @@ import { MetricsService } from './metrics.service';
       useClass: HttpLoggingInterceptor,
     },
   ],
-  exports: [MetricsService],
+  exports: [MetricsService, WorkerShutdownStateService],
 })
 export class ObservabilityModule {}
