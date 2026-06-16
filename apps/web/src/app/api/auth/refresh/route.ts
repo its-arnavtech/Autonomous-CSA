@@ -4,6 +4,7 @@ import {
   clearAuthCookies,
   getForwardedHeaders,
   getApiBaseUrl,
+  getAuthCookieNames,
   resolveCorrelationId,
   setAuthCookies,
 } from '../../_utils/proxy';
@@ -11,7 +12,8 @@ import { webLogger } from '../../_utils/web-logger';
 
 export async function POST(req: NextRequest) {
   const correlationId = resolveCorrelationId(req);
-  const refreshToken = req.cookies.get('au_refresh_token')?.value;
+  const cookieNames = getAuthCookieNames();
+  const refreshToken = req.cookies.get(cookieNames.refresh)?.value;
   if (!refreshToken) {
     const response = NextResponse.json(
       { error: 'Authentication required', correlationId },
@@ -69,7 +71,7 @@ export async function POST(req: NextRequest) {
     setAuthCookies(
       nextResponse,
       payload,
-      req.cookies.get('au_organization_id')?.value,
+      req.cookies.get(cookieNames.organization)?.value,
     );
     return nextResponse;
   } catch (error) {

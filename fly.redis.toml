@@ -1,0 +1,19 @@
+app = "autonomous-csa-staging-redis"
+primary_region = "ord"
+kill_signal = "SIGTERM"
+kill_timeout = "20s"
+
+[build]
+  dockerfile = "ops/redis/Dockerfile"
+
+[env]
+  REDIS_PORT = "6379"
+
+[mounts]
+  source = "redis_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+  processes = ["app"]

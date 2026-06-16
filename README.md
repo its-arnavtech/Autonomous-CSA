@@ -44,6 +44,40 @@ See:
 
 GitHub Actions now cover quality checks, Prisma migration validation, security scanning, Docker build readiness, CodeQL, and Dependabot hygiene. See [docs/CI_CD.md](/C:/Autonomous-CSA/docs/CI_CD.md) for the workflow breakdown, local equivalent commands, and failure handling guidance.
 
+## Phase 11 Staging
+
+Phase 11 is split into two tracks:
+
+- Phase 11A: zero-cost production-like local and CI staging verification
+- Phase 11B: hosted Fly.io staging deployment, explicitly deferred by the zero-spend infrastructure policy
+
+The Fly.io foundation remains in the repository for future use. The trial verified hosted PostgreSQL `18.3` and provisioned the Redis fallback, but trial machines could not remain running longer than five minutes and no billing method will be attached.
+
+The repo includes separate Fly manifests for future hosted staging:
+
+- `fly.web.toml`
+- `fly.api.toml`
+- `fly.worker.toml`
+- `fly.redis.toml`
+
+Active Phase 11A local staging commands:
+
+- `pnpm staging:local:up`
+- `pnpm staging:local:verify`
+- `pnpm staging:local:logs`
+- `pnpm staging:local:down`
+- `pnpm staging:local:reset`
+
+These commands use `docker-compose.staging.yml`, PostgreSQL 18, persistent Redis, production API/worker/web images, a dedicated migration container, generated local-only secrets under ignored `run-output/`, and deterministic LLM behavior. Hosted staging is not complete and production deployment is not approved.
+
+See:
+
+- [docs/STAGING_PLATFORM_DECISION.md](/C:/Autonomous-CSA/docs/STAGING_PLATFORM_DECISION.md)
+- [docs/STAGING_ARCHITECTURE.md](/C:/Autonomous-CSA/docs/STAGING_ARCHITECTURE.md)
+- [docs/STAGING_ENVIRONMENT.md](/C:/Autonomous-CSA/docs/STAGING_ENVIRONMENT.md)
+- [docs/STAGING_DEPLOYMENT.md](/C:/Autonomous-CSA/docs/STAGING_DEPLOYMENT.md)
+- [docs/STAGING_VERIFICATION.md](/C:/Autonomous-CSA/docs/STAGING_VERIFICATION.md)
+
 ## Phase 10 Hardening
 
 Local Docker infrastructure now uses PostgreSQL 18 for the `postgres` service. PostgreSQL 18 stores data under a version-specific `PGDATA` path (`/var/lib/postgresql/18/docker`) and the Compose volume is mounted at `/var/lib/postgresql` through the new `postgres-data-v18` volume. The previous PostgreSQL 16 volume is intentionally retained as a temporary rollback source until migration sign-off and the agreed retention window have both completed.
@@ -55,6 +89,8 @@ Operational hardening commands:
 - `pnpm db:restore <backup-file> --target-database-url=...`
 - `pnpm db:backup:verify <backup-file>`
 - `pnpm load:smoke`
+- `pnpm load:staging`
+- `pnpm staging:smoke`
 - `pnpm maintenance:cleanup`
 - `./scripts/staging-readiness.sh`
 

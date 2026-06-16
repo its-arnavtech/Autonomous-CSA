@@ -10,6 +10,7 @@
     "db:migrate:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
     "db:migrate:check": "tsx scripts/migrate-check.ts",
     "db:seed": "prisma db seed --schema prisma/schema.prisma",
+    "db:seed:staging": "tsx scripts/staging-seed.ts",
     "db:validate": "prisma validate --schema prisma/schema.prisma",
     "build": "tsc -p tsconfig.json",
     "maintenance:cleanup": "tsx scripts/maintenance-cleanup.ts",

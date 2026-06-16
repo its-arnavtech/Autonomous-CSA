@@ -5,6 +5,12 @@ import {
 } from '@agentic-support/observability';
 
 describe('runtime configuration validation', () => {
+  const originalEnv = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+  });
+
   it('rejects wildcard production cors origins', () => {
     expect(() =>
       loadApiRuntimeConfig({
@@ -31,6 +37,83 @@ describe('runtime configuration validation', () => {
         JWT_REFRESH_TTL: '7d',
       }),
     ).toThrow(/AUTH_COOKIE_SECURE/);
+  });
+
+  it('accepts secure staging web cookie settings', () => {
+    expect(
+      loadWebRuntimeConfig({
+        NODE_ENV: 'production',
+        APP_ENV: 'staging',
+        API_BASE_URL: 'https://api-staging.example.net',
+        WEB_PUBLIC_URL: 'https://app-staging.example.net',
+        AUTH_COOKIE_SECURE: 'true',
+        AUTH_COOKIE_SAME_SITE: 'lax',
+        AUTH_COOKIE_NAME_PREFIX: 'stg_au',
+        AUTH_COOKIE_DOMAIN: '.staging.example.net',
+        JWT_ACCESS_TTL: '15m',
+        JWT_REFRESH_TTL: '7d',
+      }),
+    ).toMatchObject({
+      appEnv: 'staging',
+      apiBaseUrl: 'https://api-staging.example.net/',
+      cookieSecure: true,
+      cookieNamePrefix: 'stg_au',
+      cookieDomain: '.staging.example.net',
+    });
+  });
+
+  it('rejects localhost staging URLs and Redis state', () => {
+    expect(() =>
+      loadApiRuntimeConfig({
+        NODE_ENV: 'production',
+        APP_ENV: 'staging',
+        PORT: '3001',
+        DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/app',
+        REDIS_URL: 'redis://localhost:6379',
+        JWT_ACCESS_SECRET: 'this-is-a-safe-access-secret-for-tests-123',
+        JWT_REFRESH_SECRET: 'this-is-a-safe-refresh-secret-for-tests-456',
+        CORS_ALLOWED_ORIGINS: 'https://app-staging.example.net',
+        METRICS_AUTH_TOKEN: 'metrics-token',
+      }),
+    ).toThrow(/DATABASE_URL|REDIS_URL/);
+  });
+
+  it('accepts explicit local staging runtime settings for compose verification', () => {
+    expect(
+      loadWebRuntimeConfig({
+        NODE_ENV: 'production',
+        APP_ENV: 'staging',
+        ALLOW_LOCAL_STAGING: 'true',
+        API_BASE_URL: 'http://api:3001',
+        WEB_PUBLIC_URL: 'http://web:3000',
+        AUTH_COOKIE_SECURE: 'false',
+        AUTH_COOKIE_SAME_SITE: 'lax',
+        AUTH_COOKIE_NAME_PREFIX: 'stg_local',
+        JWT_ACCESS_TTL: '15m',
+        JWT_REFRESH_TTL: '7d',
+      }),
+    ).toMatchObject({
+      appEnv: 'staging',
+      apiBaseUrl: 'http://api:3001/',
+      cookieSecure: false,
+      cookieNamePrefix: 'stg_local',
+    });
+  });
+
+  it('disables Swagger by default in staging', () => {
+    expect(
+      loadApiRuntimeConfig({
+        NODE_ENV: 'production',
+        APP_ENV: 'staging',
+        PORT: '3001',
+        DATABASE_URL: 'postgresql://postgres:postgres@postgres-staging.internal:5432/app',
+        REDIS_URL: 'rediss://redis-staging.internal:6379',
+        JWT_ACCESS_SECRET: 'this-is-a-safe-access-secret-for-tests-123',
+        JWT_REFRESH_SECRET: 'this-is-a-safe-refresh-secret-for-tests-456',
+        CORS_ALLOWED_ORIGINS: 'https://app-staging.example.net',
+        METRICS_AUTH_TOKEN: 'metrics-token',
+      }).swaggerEnabled,
+    ).toBe(false);
   });
 
   it('rejects placeholder production JWT secrets', () => {
@@ -83,6 +166,7 @@ describe('runtime configuration validation', () => {
         DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/app',
         REDIS_URL: 'redis://localhost:6379',
         AI_PROVIDER: 'deterministic',
+        METRICS_AUTH_TOKEN: 'metrics-token',
       }),
     ).not.toThrow();
   });

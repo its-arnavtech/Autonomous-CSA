@@ -9,10 +9,6 @@ import { webLogger } from './web-logger';
 
 export { CORRELATION_ID_HEADER };
 
-const ACCESS_COOKIE = 'au_access_token';
-const REFRESH_COOKIE = 'au_refresh_token';
-const ORGANIZATION_COOKIE = 'au_organization_id';
-
 type JsonMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
 type ProxyRequestParams = {
@@ -35,6 +31,15 @@ type AuthPayload = {
 
 function getWebConfig() {
   return loadWebRuntimeConfig();
+}
+
+export function getAuthCookieNames() {
+  const prefix = getWebConfig().cookieNamePrefix;
+  return {
+    access: `${prefix}_access_token`,
+    refresh: `${prefix}_refresh_token`,
+    organization: `${prefix}_organization_id`,
+  };
 }
 
 function getAccessCookieMaxAgeSeconds() {
@@ -110,44 +115,35 @@ function getLogRoute(upstreamUrl: string) {
   }
 }
 
-export function getAuthCookieNames() {
-  return {
-    access: ACCESS_COOKIE,
-    refresh: REFRESH_COOKIE,
-    organization: ORGANIZATION_COOKIE,
-  };
-}
-
 export function setAuthCookies(
   response: NextResponse,
   payload: AuthPayload,
   organizationId?: string,
 ) {
   const config = getWebConfig();
-
-  response.cookies.set(ACCESS_COOKIE, payload.accessToken, {
+  const cookieNames = getAuthCookieNames();
+  const cookieBase = {
     httpOnly: true,
     sameSite: config.cookieSameSite,
     secure: config.cookieSecure,
+    domain: config.cookieDomain,
     path: '/',
+  } as const;
+
+  response.cookies.set(cookieNames.access, payload.accessToken, {
+    ...cookieBase,
     maxAge: getAccessCookieMaxAgeSeconds(),
   });
-  response.cookies.set(REFRESH_COOKIE, payload.refreshToken, {
-    httpOnly: true,
-    sameSite: config.cookieSameSite,
-    secure: config.cookieSecure,
-    path: '/',
+  response.cookies.set(cookieNames.refresh, payload.refreshToken, {
+    ...cookieBase,
     maxAge: getRefreshCookieMaxAgeSeconds(),
   });
 
   const fallbackOrganizationId =
     organizationId ?? payload.memberships?.[0]?.organizationId;
   if (fallbackOrganizationId) {
-    response.cookies.set(ORGANIZATION_COOKIE, fallbackOrganizationId, {
-      httpOnly: true,
-      sameSite: config.cookieSameSite,
-      secure: config.cookieSecure,
-      path: '/',
+    response.cookies.set(cookieNames.organization, fallbackOrganizationId, {
+      ...cookieBase,
       maxAge: getRefreshCookieMaxAgeSeconds(),
     });
   }
@@ -158,10 +154,12 @@ export function setSelectedOrganizationCookie(
   organizationId: string,
 ) {
   const config = getWebConfig();
-  response.cookies.set(ORGANIZATION_COOKIE, organizationId, {
+  const cookieNames = getAuthCookieNames();
+  response.cookies.set(cookieNames.organization, organizationId, {
     httpOnly: true,
     sameSite: config.cookieSameSite,
     secure: config.cookieSecure,
+    domain: config.cookieDomain,
     path: '/',
     maxAge: getRefreshCookieMaxAgeSeconds(),
   });
@@ -169,11 +167,17 @@ export function setSelectedOrganizationCookie(
 
 export function clearAuthCookies(response: NextResponse) {
   const config = getWebConfig();
-  for (const cookieName of [ACCESS_COOKIE, REFRESH_COOKIE, ORGANIZATION_COOKIE]) {
+  const cookieNames = getAuthCookieNames();
+  for (const cookieName of [
+    cookieNames.access,
+    cookieNames.refresh,
+    cookieNames.organization,
+  ]) {
     response.cookies.set(cookieName, '', {
       httpOnly: true,
       sameSite: config.cookieSameSite,
       secure: config.cookieSecure,
+      domain: config.cookieDomain,
       path: '/',
       maxAge: 0,
     });
@@ -335,9 +339,10 @@ async function sendUpstreamRequest(params: {
   allowRefresh: boolean;
   correlationId: string;
 }) {
-  const accessToken = params.req.cookies.get(ACCESS_COOKIE)?.value;
-  const refreshToken = params.req.cookies.get(REFRESH_COOKIE)?.value;
-  const organizationId = params.req.cookies.get(ORGANIZATION_COOKIE)?.value;
+  const cookieNames = getAuthCookieNames();
+  const accessToken = params.req.cookies.get(cookieNames.access)?.value;
+  const refreshToken = params.req.cookies.get(cookieNames.refresh)?.value;
+  const organizationId = params.req.cookies.get(cookieNames.organization)?.value;
 
   if (params.requireAuth && !accessToken && !refreshToken) {
     return {

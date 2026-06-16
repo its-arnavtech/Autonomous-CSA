@@ -93,12 +93,17 @@ Local Compose uses PostgreSQL 18 with a new `postgres-data-v18` volume mounted a
 
 ## Future deployment plan
 
-The current workflows stop at verification. A later deployment phase can add:
+The main CI workflow stops at verification. Phase 11 adds `.github/workflows/staging-deploy.yml`, which validates the release candidate, builds and scans immutable GHCR images, and deploys to Fly.io only when `STAGING_PLATFORM_CONFIRMED=true` and `STAGING_COST_APPROVED=true`.
 
-- image publishing
-- environment-scoped secrets
-- preview or staging promotion
-- Fly.io release jobs
-- migration gating before deploy
+The Fly deployment path uses:
+
+- `fly.api.toml`
+- `fly.worker.toml`
+- `fly.web.toml`
+- API release-command migration
+- guarded staging seed
+- hosted smoke tests
+
+Live execution still requires Fly app provisioning, app secrets, GitHub `staging` environment secrets, and explicit cost approval.
 
 That future phase should stay separate from the current CI foundation so quality and security checks remain fast and deterministic.

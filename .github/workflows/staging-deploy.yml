@@ -1,0 +1,321 @@
+name: Staging Deployment
+
+on:
+  push:
+    branches:
+      - staging-deployment
+  workflow_dispatch:
+    inputs:
+      release_candidate:
+        description: Optional release-candidate tag, for example v0.11.0-rc.1
+        required: false
+        type: string
+      hosted_deploy:
+        description: Set true only after hosted Phase 11B is explicitly re-enabled
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+concurrency:
+  group: staging-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+  deployments: write
+
+env:
+  NODE_VERSION: "22"
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/autonomous-csa
+  FLY_API_APP: ${{ vars.FLY_API_APP || 'autonomous-csa-staging-api' }}
+  FLY_WORKER_APP: ${{ vars.FLY_WORKER_APP || 'autonomous-csa-staging-worker' }}
+  FLY_WEB_APP: ${{ vars.FLY_WEB_APP || 'autonomous-csa-staging-web' }}
+  STAGING_API_URL: ${{ vars.STAGING_API_URL || 'https://autonomous-csa-staging-api.fly.dev' }}
+  STAGING_WEB_URL: ${{ vars.STAGING_WEB_URL || 'https://autonomous-csa-staging-web.fly.dev' }}
+  APP_VERSION: ${{ github.event.inputs.release_candidate || '0.11.0-staging' }}
+  GIT_SHA: ${{ github.sha }}
+  BUILD_TIMESTAMP: ${{ github.event.head_commit.timestamp || 'unknown' }}
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  validate:
+    name: Validate release candidate
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agentic_support
+      REDIS_URL: redis://localhost:6379
+      API_BASE_URL: http://localhost:3001
+      JWT_ACCESS_SECRET: ci-access-secret-not-for-production-1234567890
+      JWT_REFRESH_SECRET: ci-refresh-secret-not-for-production-1234567890
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_TTL: 7d
+      AI_PROVIDER: deterministic
+      AI_API_KEY: ci-placeholder
+      AI_ENABLE_FALLBACK: "true"
+      CORS_ALLOWED_ORIGINS: http://localhost:3000
+      METRICS_AUTH_TOKEN: ci-metrics-token-not-for-production
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: agentic_support
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d agentic_support"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Validate Prisma schema
+        run: pnpm db:validate
+
+      - name: Apply migrations once
+        run: pnpm db:migrate:deploy
+
+      - name: Check migration safety
+        run: pnpm db:migrate:check
+
+      - name: Verify Redis BullMQ compatibility
+        run: pnpm staging:redis:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Audit dependencies
+        run: pnpm audit --audit-level low
+
+      - name: Validate local staging compose config
+        run: |
+          cp .env.staging.example run-output.env
+          docker compose --env-file run-output.env -f docker-compose.staging.yml config
+
+  images:
+    name: Build and scan images
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.hosted_deploy == 'true' && vars.STAGING_HOSTED_DEPLOYMENT_ENABLED == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api
+            dockerfile: ./apps/api/Dockerfile
+          - service: worker
+            dockerfile: ./apps/worker/Dockerfile
+          - service: web
+            dockerfile: ./apps/web/Dockerfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}
+          tags: |
+            type=raw,value=${{ github.sha }}
+            type=sha,format=long,prefix=
+            type=raw,value=${{ github.event.inputs.release_candidate }},enable=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_candidate != '' }}
+
+      - name: Build image
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ env.APP_VERSION }}
+            GIT_SHA=${{ env.GIT_SHA }}
+            BUILD_TIMESTAMP=${{ env.BUILD_TIMESTAMP }}
+
+      - name: Scan image
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}@${{ steps.build.outputs.digest }}
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
+      - name: Record image digest
+        run: |
+          mkdir -p staging-artifacts
+          echo "${{ matrix.service }}=${{ env.IMAGE_PREFIX }}-${{ matrix.service }}@${{ steps.build.outputs.digest }}" >> staging-artifacts/images.txt
+
+      - name: Upload image digest artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: staging-image-${{ matrix.service }}
+          path: staging-artifacts/images.txt
+
+  deploy-blocked-without-approval:
+    name: Deployment approval gate
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.hosted_deploy != 'true' || vars.STAGING_HOSTED_DEPLOYMENT_ENABLED != 'true'
+    steps:
+      - name: Stop before provider-specific deployment
+        run: |
+          echo "Phase 11A validation completed."
+          echo "Hosted Phase 11B deployment is deferred by the zero-spend policy."
+          echo "No Fly deployment, hosted image scan/push, or RC tag is run from this path."
+
+  deploy:
+    name: Deploy staging
+    runs-on: ubuntu-latest
+    needs: images
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.hosted_deploy == 'true' && vars.STAGING_HOSTED_DEPLOYMENT_ENABLED == 'true'
+    environment: staging
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      STAGING_SMOKE_EMAIL: ${{ secrets.STAGING_SMOKE_EMAIL }}
+      STAGING_SMOKE_PASSWORD: ${{ secrets.STAGING_SMOKE_PASSWORD }}
+      METRICS_AUTH_TOKEN: ${{ secrets.STAGING_METRICS_AUTH_TOKEN }}
+      REDIS_URL: ${{ secrets.STAGING_REDIS_URL }}
+      EXPECTED_GIT_SHA: ${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install smoke dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Verify Fly apps
+        run: |
+          flyctl status --app "${FLY_API_APP}"
+          flyctl status --app "${FLY_WORKER_APP}"
+          flyctl status --app "${FLY_WEB_APP}"
+
+      - name: Verify Redis BullMQ compatibility
+        run: pnpm staging:redis:check
+
+      - name: Deploy API and run release migration
+        run: |
+          flyctl deploy \
+            --app "${FLY_API_APP}" \
+            --config fly.api.toml \
+            --image "${IMAGE_PREFIX}-api:${GIT_SHA}" \
+            --strategy rolling \
+            --wait-timeout 300
+
+      - name: Verify API readiness
+        run: |
+          curl --fail --show-error --silent "${STAGING_API_URL}/health/ready"
+          curl --fail --show-error --silent "${STAGING_API_URL}/version"
+
+      - name: Run guarded staging seed
+        run: |
+          flyctl ssh console \
+            --app "${FLY_API_APP}" \
+            --command "pnpm --dir /app --filter @agentic-support/db db:seed:staging"
+
+      - name: Deploy worker
+        run: |
+          flyctl deploy \
+            --app "${FLY_WORKER_APP}" \
+            --config fly.worker.toml \
+            --image "${IMAGE_PREFIX}-worker:${GIT_SHA}" \
+            --strategy rolling \
+            --wait-timeout 300
+
+      - name: Verify worker readiness
+        run: flyctl checks list --app "${FLY_WORKER_APP}"
+
+      - name: Deploy web
+        run: |
+          flyctl deploy \
+            --app "${FLY_WEB_APP}" \
+            --config fly.web.toml \
+            --image "${IMAGE_PREFIX}-web:${GIT_SHA}" \
+            --strategy rolling \
+            --wait-timeout 300
+
+      - name: Verify web readiness
+        run: |
+          curl --fail --show-error --silent "${STAGING_WEB_URL}/api/version"
+
+      - name: Run staging smoke tests
+        run: pnpm staging:smoke
+
+      - name: Record Fly releases
+        run: |
+          mkdir -p staging-artifacts
+          flyctl releases --app "${FLY_API_APP}" --json > staging-artifacts/fly-api-releases.json
+          flyctl releases --app "${FLY_WORKER_APP}" --json > staging-artifacts/fly-worker-releases.json
+          flyctl releases --app "${FLY_WEB_APP}" --json > staging-artifacts/fly-web-releases.json
+
+      - name: Upload Fly release artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: staging-fly-releases
+          path: staging-artifacts/fly-*-releases.json

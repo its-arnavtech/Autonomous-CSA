@@ -3,7 +3,8 @@
 ## Tooling
 
 - Primary tool: `k6`
-- Script: [scripts/load/k6-smoke.js](/C:/Autonomous-CSA/scripts/load/k6-smoke.js)
+- Local script: [scripts/load/k6-smoke.js](/C:/Autonomous-CSA/scripts/load/k6-smoke.js)
+- Hosted staging script: [scripts/load/k6-staging.js](/C:/Autonomous-CSA/scripts/load/k6-staging.js)
 
 ## Covered Flows
 
@@ -26,6 +27,9 @@
 - `INCLUDE_CREATE_TICKET`
 - `INCLUDE_REFRESH`
 - `CREATE_TICKET_CUSTOMER_EMAIL`
+- `STAGING_API_URL`
+- `STAGING_SMOKE_EMAIL`
+- `STAGING_SMOKE_PASSWORD`
 
 ## Expectations
 
@@ -39,6 +43,7 @@
 
 ```bash
 pnpm load:smoke
+pnpm load:staging
 ```
 
 If `k6` is not installed on the host, a containerized fallback is acceptable:

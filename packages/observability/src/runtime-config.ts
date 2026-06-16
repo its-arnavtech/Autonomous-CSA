@@ -1,4 +1,5 @@
 type NodeEnv = 'development' | 'test' | 'production';
+type AppEnv = 'development' | 'test' | 'staging' | 'production';
 
 type RuntimeEnv = Record<string, string | undefined>;
 
@@ -23,6 +24,7 @@ type RedisRuntimeConfig = {
 
 export type ApiRuntimeConfig = {
   nodeEnv: NodeEnv;
+  appEnv: AppEnv;
   isProduction: boolean;
   port: number;
   trustProxy: boolean | number | string;
@@ -64,6 +66,7 @@ export type ApiRuntimeConfig = {
 
 export type WorkerRuntimeConfig = {
   nodeEnv: NodeEnv;
+  appEnv: AppEnv;
   isProduction: boolean;
   port: number;
   databaseUrl: string;
@@ -82,10 +85,15 @@ export type WorkerRuntimeConfig = {
 
 export type WebRuntimeConfig = {
   nodeEnv: NodeEnv;
+  appEnv: AppEnv;
   isProduction: boolean;
   apiBaseUrl: string;
+  publicWebUrl?: string;
+  internalApiUrl?: string;
   cookieSecure: boolean;
   cookieSameSite: 'lax' | 'strict' | 'none';
+  cookieNamePrefix: string;
+  cookieDomain?: string;
   accessTtlSeconds: number;
   refreshTtlSeconds: number;
 };
@@ -116,6 +124,21 @@ function parseNodeEnv(value: string | undefined, errors: string[]): NodeEnv {
 
   errors.push('NODE_ENV must be one of development, test, or production');
   return 'development';
+}
+
+function parseAppEnv(value: string | undefined, nodeEnv: NodeEnv, errors: string[]): AppEnv {
+  const normalized = value?.trim() || nodeEnv;
+  if (
+    normalized === 'development' ||
+    normalized === 'test' ||
+    normalized === 'staging' ||
+    normalized === 'production'
+  ) {
+    return normalized;
+  }
+
+  errors.push('APP_ENV must be one of development, test, staging, or production');
+  return nodeEnv === 'production' ? 'production' : nodeEnv;
 }
 
 function parseInteger(input: {
@@ -283,14 +306,14 @@ function validateSecret(
 
 function parseCorsAllowedOrigins(
   env: RuntimeEnv,
-  isProduction: boolean,
+  isProductionLike: boolean,
   errors: string[],
 ) {
   const raw = env.CORS_ALLOWED_ORIGINS?.trim();
 
   if (!raw) {
-    if (isProduction) {
-      errors.push('CORS_ALLOWED_ORIGINS is required in production');
+    if (isProductionLike) {
+      errors.push('CORS_ALLOWED_ORIGINS is required in production-like environments');
       return [];
     }
 
@@ -306,8 +329,8 @@ function parseCorsAllowedOrigins(
     errors.push('CORS_ALLOWED_ORIGINS must contain at least one origin');
   }
 
-  if (isProduction && origins.some((origin) => origin === '*' || origin.includes('*'))) {
-    errors.push('CORS_ALLOWED_ORIGINS must not contain wildcards in production');
+  if (isProductionLike && origins.some((origin) => origin === '*' || origin.includes('*'))) {
+    errors.push('CORS_ALLOWED_ORIGINS must not contain wildcards in production-like environments');
   }
 
   for (const origin of origins) {
@@ -318,6 +341,42 @@ function parseCorsAllowedOrigins(
   }
 
   return origins;
+}
+
+function isLocalHostname(hostname: string) {
+  const normalized = hostname.toLowerCase();
+  return normalized === 'localhost' ||
+    normalized === '127.0.0.1' ||
+    normalized === '::1' ||
+    normalized.endsWith('.localhost');
+}
+
+function allowsLocalStaging(env: RuntimeEnv) {
+  return env.ALLOW_LOCAL_STAGING?.trim().toLowerCase() === 'true';
+}
+
+function validateHostedUrl(
+  url: URL | null,
+  variableName: string,
+  appEnv: AppEnv,
+  env: RuntimeEnv,
+  errors: string[],
+) {
+  if (!url || appEnv !== 'staging') {
+    return;
+  }
+
+  if (url.protocol === 'http:' && !allowsLocalStaging(env)) {
+    errors.push(`${variableName} must use https in staging`);
+  }
+
+  if (isLocalHostname(url.hostname) && !allowsLocalStaging(env)) {
+    errors.push(`${variableName} must not use localhost in staging`);
+  }
+
+  if (/\bprod(uction)?\b/i.test(url.hostname)) {
+    errors.push(`${variableName} must not use a production-looking hostname in staging`);
+  }
 }
 
 function parseSameSite(
@@ -420,17 +479,17 @@ function parseRedisRuntimeConfig(env: RuntimeEnv, errors: string[]): RedisRuntim
 
 function parseSwaggerEnabled(
   env: RuntimeEnv,
-  isProduction: boolean,
+  isProductionLike: boolean,
   errors: string[],
 ) {
   if (env.SWAGGER_ENABLED == null) {
-    return !isProduction;
+    return !isProductionLike;
   }
 
   return parseBoolean({
     env,
     name: 'SWAGGER_ENABLED',
-    defaultValue: !isProduction,
+    defaultValue: !isProductionLike,
     errors,
   });
 }
@@ -457,12 +516,19 @@ function parseFailMode(
 export function loadApiRuntimeConfig(env: RuntimeEnv = process.env): ApiRuntimeConfig {
   const errors: string[] = [];
   const nodeEnv = parseNodeEnv(env.NODE_ENV, errors);
+  const appEnv = parseAppEnv(env.APP_ENV, nodeEnv, errors);
   const isProduction = nodeEnv === 'production';
-  const databaseUrl = parseUrl(env.DATABASE_URL, 'DATABASE_URL', errors, [
+  const isProductionLike = isProduction || appEnv === 'staging' || appEnv === 'production';
+  const parsedDatabaseUrl = parseUrl(env.DATABASE_URL, 'DATABASE_URL', errors, [
     'postgres:',
     'postgresql:',
-  ])?.toString() ?? '';
+  ]);
+  validateHostedUrl(parsedDatabaseUrl, 'DATABASE_URL', appEnv, env, errors);
+  const databaseUrl = parsedDatabaseUrl?.toString() ?? '';
   const redis = parseRedisRuntimeConfig(env, errors);
+  if (appEnv === 'staging' && isLocalHostname(redis.summary.host) && !allowsLocalStaging(env)) {
+    errors.push('REDIS_URL must not use localhost in staging');
+  }
   const accessSecret = validateSecret(
     'JWT_ACCESS_SECRET',
     env.JWT_ACCESS_SECRET,
@@ -494,6 +560,7 @@ export function loadApiRuntimeConfig(env: RuntimeEnv = process.env): ApiRuntimeC
 
   const config: ApiRuntimeConfig = {
     nodeEnv,
+    appEnv,
     isProduction,
     port: parseInteger({
       env,
@@ -506,8 +573,8 @@ export function loadApiRuntimeConfig(env: RuntimeEnv = process.env): ApiRuntimeC
     trustProxy: parseTrustProxy(env.TRUST_PROXY, errors),
     databaseUrl,
     redis,
-    corsAllowedOrigins: parseCorsAllowedOrigins(env, isProduction, errors),
-    swaggerEnabled: parseSwaggerEnabled(env, isProduction, errors),
+    corsAllowedOrigins: parseCorsAllowedOrigins(env, isProductionLike, errors),
+    swaggerEnabled: parseSwaggerEnabled(env, isProductionLike, errors),
     shutdownGraceMs: parseDurationToMilliseconds(
       env.SHUTDOWN_GRACE_MS,
       'SHUTDOWN_GRACE_MS',
@@ -623,8 +690,8 @@ export function loadApiRuntimeConfig(env: RuntimeEnv = process.env): ApiRuntimeC
     },
   };
 
-  if (config.isProduction && !config.metricsAuthToken && config.metricsEnabled) {
-    errors.push('METRICS_AUTH_TOKEN is required when METRICS_ENABLED=true in production');
+  if (isProductionLike && !config.metricsAuthToken && config.metricsEnabled) {
+    errors.push('METRICS_AUTH_TOKEN is required when METRICS_ENABLED=true in production-like environments');
   }
 
   if (config.shutdownGraceMs < config.healthTimeoutMs) {
@@ -643,11 +710,14 @@ export function loadWorkerRuntimeConfig(
 ): WorkerRuntimeConfig {
   const errors: string[] = [];
   const nodeEnv = parseNodeEnv(env.NODE_ENV, errors);
+  const appEnv = parseAppEnv(env.APP_ENV, nodeEnv, errors);
   const isProduction = nodeEnv === 'production';
-  const databaseUrl = parseUrl(env.DATABASE_URL, 'DATABASE_URL', errors, [
+  const parsedDatabaseUrl = parseUrl(env.DATABASE_URL, 'DATABASE_URL', errors, [
     'postgres:',
     'postgresql:',
-  ])?.toString() ?? '';
+  ]);
+  validateHostedUrl(parsedDatabaseUrl, 'DATABASE_URL', appEnv, env, errors);
+  const databaseUrl = parsedDatabaseUrl?.toString() ?? '';
   const provider =
     (env.AI_PROVIDER?.trim().toLowerCase() as
       | 'deterministic'
@@ -666,6 +736,7 @@ export function loadWorkerRuntimeConfig(
 
   const config: WorkerRuntimeConfig = {
     nodeEnv,
+    appEnv,
     isProduction,
     port: parseInteger({
       env,
@@ -752,6 +823,14 @@ export function loadWorkerRuntimeConfig(
     },
   };
 
+  if (appEnv === 'staging' && isLocalHostname(config.redis.summary.host) && !allowsLocalStaging(env)) {
+    errors.push('REDIS_URL must not use localhost in staging');
+  }
+
+  if ((isProduction || appEnv === 'staging') && !config.metricsAuthToken && config.metricsEnabled) {
+    errors.push('METRICS_AUTH_TOKEN is required when METRICS_ENABLED=true in production-like environments');
+  }
+
   if (errors.length > 0) {
     fail(errors);
   }
@@ -762,15 +841,23 @@ export function loadWorkerRuntimeConfig(
 export function loadWebRuntimeConfig(env: RuntimeEnv = process.env): WebRuntimeConfig {
   const errors: string[] = [];
   const nodeEnv = parseNodeEnv(env.NODE_ENV, errors);
+  const appEnv = parseAppEnv(env.APP_ENV, nodeEnv, errors);
   const isProduction = nodeEnv === 'production';
+  const isProductionLike = isProduction || appEnv === 'staging' || appEnv === 'production';
   const apiBaseUrl = parseUrl(env.API_BASE_URL, 'API_BASE_URL', errors, [
     'http:',
     'https:',
-  ])?.toString() ?? '';
+  ]);
+  const publicWebUrl = env.WEB_PUBLIC_URL?.trim()
+    ? parseUrl(env.WEB_PUBLIC_URL, 'WEB_PUBLIC_URL', errors, ['http:', 'https:'])
+    : null;
+  const internalApiUrl = env.INTERNAL_API_URL?.trim()
+    ? parseUrl(env.INTERNAL_API_URL, 'INTERNAL_API_URL', errors, ['http:', 'https:'])
+    : null;
   const cookieSecure = parseBoolean({
     env,
     name: 'AUTH_COOKIE_SECURE',
-    defaultValue: isProduction,
+    defaultValue: isProductionLike,
     errors,
   });
   const cookieSameSite = parseSameSite(
@@ -791,8 +878,11 @@ export function loadWebRuntimeConfig(env: RuntimeEnv = process.env): WebRuntimeC
     errors,
   );
 
-  if (isProduction && !cookieSecure) {
-    errors.push('AUTH_COOKIE_SECURE must be true in production');
+  validateHostedUrl(apiBaseUrl, 'API_BASE_URL', appEnv, env, errors);
+  validateHostedUrl(publicWebUrl, 'WEB_PUBLIC_URL', appEnv, env, errors);
+
+  if (isProductionLike && !cookieSecure && !allowsLocalStaging(env)) {
+    errors.push('AUTH_COOKIE_SECURE must be true in production-like environments');
   }
 
   if (cookieSameSite === 'none' && !cookieSecure) {
@@ -803,16 +893,31 @@ export function loadWebRuntimeConfig(env: RuntimeEnv = process.env): WebRuntimeC
     errors.push('JWT_REFRESH_TTL must be greater than JWT_ACCESS_TTL');
   }
 
+  const cookieNamePrefix = env.AUTH_COOKIE_NAME_PREFIX?.trim() || 'au';
+  if (!/^[a-z0-9][a-z0-9_-]{1,30}$/i.test(cookieNamePrefix)) {
+    errors.push('AUTH_COOKIE_NAME_PREFIX must be 2-31 URL-safe characters');
+  }
+
+  const cookieDomain = env.AUTH_COOKIE_DOMAIN?.trim() || undefined;
+  if (appEnv === 'staging' && !cookieDomain && !allowsLocalStaging(env)) {
+    errors.push('AUTH_COOKIE_DOMAIN is required in staging');
+  }
+
   if (errors.length > 0) {
     fail(errors);
   }
 
   return {
     nodeEnv,
+    appEnv,
     isProduction,
-    apiBaseUrl,
+    apiBaseUrl: apiBaseUrl?.toString() ?? '',
+    publicWebUrl: publicWebUrl?.toString(),
+    internalApiUrl: internalApiUrl?.toString(),
     cookieSecure,
     cookieSameSite,
+    cookieNamePrefix,
+    cookieDomain,
     accessTtlSeconds,
     refreshTtlSeconds,
   };

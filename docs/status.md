@@ -60,3 +60,12 @@ Validation run from `C:\Autonomous-CSA` during the Phase 8 closeout.
 - Production hardening is implemented on `prod-hardening`, including runtime config validation, graceful shutdown, distributed rate limiting, backup/restore tooling, retention cleanup, Docker hardening, migration safety checks, CI hardening, and runbooks.
 - Local and CI database infrastructure now targets PostgreSQL 18, with a new PostgreSQL 18 volume layout and the old PostgreSQL 16 Docker volume retained for temporary rollback until migration sign-off.
 - The branch is not yet fully marked complete in this status file because merge readiness still depends on the latest verified backup/restore drill, live load/shutdown/outage drills, and final branch push state.
+
+## Phase 11
+
+- Phase 11 is split into Phase 11A zero-cost local/CI staging verification and Phase 11B hosted Fly staging deployment.
+- Fly.io remains the future hosted staging platform foundation. Fly manifests and CI deploy orchestration are present for separate web, API, and worker apps.
+- During the trial, Fly app shells for web/API/worker, a PostgreSQL 18 staging service, and a private Redis fallback service were provisioned in the `personal` Fly organization.
+- Hosted PostgreSQL version was verified as `18.3`. Fly Upstash Redis required billing configuration, so `fly.redis.toml` and `ops/redis/Dockerfile` define the private Redis fallback for future use.
+- No billing method will be attached. Hosted Phase 11B gates are deferred by the zero-spend infrastructure policy, not treated as a technical failure.
+- Active Phase 11A work uses `docker-compose.staging.yml`, `.env.staging.example`, and `pnpm staging:local:*` commands to verify production images, PostgreSQL 18, Redis/BullMQ, migrations, seed, smoke, backup, and restore locally/CI without paid services.

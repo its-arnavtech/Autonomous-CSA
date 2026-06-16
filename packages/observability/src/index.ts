@@ -1,4 +1,5 @@
 export * from './correlation';
+export * from './deployment-metadata';
 export * from './errors';
 export * from './logger';
 export * from './metrics';

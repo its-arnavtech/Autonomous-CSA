@@ -19,6 +19,11 @@ export type SessionData = {
 };
 
 export async function getRequestBaseUrl() {
+  const internalWebUrl = process.env.INTERNAL_WEB_URL?.trim();
+  if (process.env.ALLOW_LOCAL_STAGING === 'true' && internalWebUrl) {
+    return internalWebUrl.replace(/\/+$/, '');
+  }
+
   const requestHeaders = await headers();
   const host = requestHeaders.get('host');
   const proto = requestHeaders.get('x-forwarded-proto') ?? 'http';

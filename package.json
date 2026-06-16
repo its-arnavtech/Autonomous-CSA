@@ -1,6 +1,8 @@
 {
   "devDependencies": {
+    "bullmq": "5.78.1",
     "cross-env": "^10.1.0",
+    "ioredis": "5.11.1",
     "turbo": "^2.9.18"
   },
   "name": "agentic-support-saas",
@@ -17,12 +19,23 @@
     "db:migrate:check": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support pnpm --filter @agentic-support/db db:migrate:check",
     "db:migrate:deploy": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support pnpm --filter @agentic-support/db db:migrate:deploy",
     "db:seed": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support pnpm --filter @agentic-support/db db:seed",
+    "db:seed:staging": "pnpm --filter @agentic-support/db db:seed:staging",
     "db:validate": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support pnpm --filter @agentic-support/db db:validate",
     "load:smoke": "k6 run scripts/load/k6-smoke.js",
+    "load:staging": "k6 run scripts/load/k6-staging.js",
     "maintenance:cleanup": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support pnpm --filter @agentic-support/db maintenance:cleanup",
     "lint": "pnpm --filter @agentic-support/db build && pnpm --filter @agentic-support/observability build && turbo lint",
     "typecheck": "pnpm --filter @agentic-support/db build && pnpm --filter @agentic-support/observability build && turbo typecheck",
-    "test": "turbo test && node --test scripts/lib/postgres-tools.test.mjs",
+    "test": "turbo test && node --test scripts/lib/postgres-tools.test.mjs scripts/lib/staging-tools.test.mjs",
+    "staging:redis:check": "node scripts/redis-bullmq-check.mjs",
+    "staging:local:up": "node scripts/staging-local.mjs up",
+    "staging:local:down": "node scripts/staging-local.mjs down",
+    "staging:local:logs": "node scripts/staging-local.mjs logs",
+    "staging:local:reset": "node scripts/staging-local.mjs reset",
+    "staging:local:verify": "node scripts/staging-local.mjs verify",
+    "staging:local:load": "node scripts/staging-local-load.mjs",
+    "staging:local:regression": "node scripts/staging-local-regression.mjs",
+    "staging:smoke": "node scripts/staging-smoke.mjs",
     "ci": "pnpm db:generate && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "ci:security": "pnpm audit --audit-level high",
     "ci:docker": "docker build -f apps/api/Dockerfile -t autonomous-csa-api:ci . && docker build -f apps/worker/Dockerfile -t autonomous-csa-worker:ci . && docker build -f apps/web/Dockerfile -t autonomous-csa-web:ci ."

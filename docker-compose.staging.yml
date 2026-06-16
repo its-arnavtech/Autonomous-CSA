@@ -1,0 +1,138 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "55432:5432"
+    volumes:
+      - staging-postgres-v18:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    user: "redis"
+    command: ["sh", "-c", "exec redis-server --appendonly yes --dir /data --requirepass \"$${REDIS_PASSWORD}\""]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    ports:
+      - "6380:6379"
+    volumes:
+      - staging-redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" --no-auth-warning ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  migration:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      args:
+        APP_VERSION: ${APP_VERSION}
+        GIT_SHA: ${GIT_SHA}
+        BUILD_TIMESTAMP: ${BUILD_TIMESTAMP}
+    image: autonomous-csa-api:staging-local-${GIT_SHA}
+    environment:
+      APP_ENV: ${APP_ENV}
+      NODE_ENV: ${NODE_ENV}
+      ALLOW_LOCAL_STAGING: ${ALLOW_LOCAL_STAGING}
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["pnpm", "--dir", "/app/packages/db", "db:migrate:deploy"]
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      args:
+        APP_VERSION: ${APP_VERSION}
+        GIT_SHA: ${GIT_SHA}
+        BUILD_TIMESTAMP: ${BUILD_TIMESTAMP}
+    image: autonomous-csa-api:staging-local-${GIT_SHA}
+    env_file:
+      - ${STAGING_LOCAL_ENV_FILE}
+    environment:
+      PORT: "3001"
+    ports:
+      - "3101:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3001/health/ready').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+      args:
+        APP_VERSION: ${APP_VERSION}
+        GIT_SHA: ${GIT_SHA}
+        BUILD_TIMESTAMP: ${BUILD_TIMESTAMP}
+    image: autonomous-csa-worker:staging-local-${GIT_SHA}
+    env_file:
+      - ${STAGING_LOCAL_ENV_FILE}
+    environment:
+      PORT: "3002"
+    ports:
+      - "3102:3002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3002/health/ready').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        APP_VERSION: ${APP_VERSION}
+        GIT_SHA: ${GIT_SHA}
+        BUILD_TIMESTAMP: ${BUILD_TIMESTAMP}
+    image: autonomous-csa-web:staging-local-${GIT_SHA}
+    env_file:
+      - ${STAGING_LOCAL_ENV_FILE}
+    environment:
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "3100:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/version').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  staging-postgres-v18:
+  staging-redis-data:
