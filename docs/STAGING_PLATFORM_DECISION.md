@@ -1,6 +1,6 @@
 # Staging Platform Decision Memo
 
-Status: Fly.io approved for Phase 11 staging. Provisioning remains blocked until cost approval, Fly CLI authentication, and GitHub authentication are available.
+Status: Fly.io approved for Phase 11 staging. Core app shells, PostgreSQL 18, and a private Redis fallback app have been provisioned in the `personal` Fly organization. Remaining hosted gates are blocked until the Fly trial organization has billing attached, because trial machines are stopped after five minutes.
 
 ## Repository Signals
 
@@ -37,7 +37,9 @@ Do not provision Fly Managed Postgres unless Fly explicitly exposes PostgreSQL 1
 
 Use Fly-integrated Upstash Redis only on a fixed-price plan with eviction disabled if a live BullMQ compatibility test passes. Fly's Upstash docs explicitly call out BullMQ workloads and recommend fixed-price plans for BullMQ-like software. Upstash documents private Fly organization connectivity, backups, transactions, key expiry, and eviction controls.
 
-If the compatibility test fails for BullMQ `Queue`, `Worker`, `QueueEvents`, delayed jobs, Lua scripts, streams, or reconnect behavior, provision a dedicated private Redis service on Fly Machines with persistence instead.
+Fly Upstash add-on creation was attempted for `autonomous-csa-staging-redis`, but Fly rejected add-on creation for the trial organization until billing is configured. The fallback is now a dedicated private Redis Fly app using `fly.redis.toml`, `ops/redis/Dockerfile`, a `shared-cpu-1x` 256MB Machine, and a 1GB encrypted `redis_data` volume.
+
+The fallback Redis service still must pass the live BullMQ compatibility gate for `Queue`, `Worker`, `QueueEvents`, delayed jobs, Lua scripts, streams, reconnect behavior, transactions, and key expiry before API/worker deployment can proceed.
 
 ## Cost Preview
 
@@ -51,11 +53,12 @@ Smallest practical staging estimate in `ord`, running continuously:
 | PostgreSQL 18 Machine | Fly Postgres development single node, 256MB, 1GB disk | about `$2` per Fly pricing example |
 | Postgres volume | 1GB | about `$0.15` |
 | Volume snapshots | first 10GB free, then `$0.08/GB-month` | expected `$0` at small staging size |
-| Redis | Upstash fixed-price plan, eviction disabled | confirm exact plan price before creating |
+| Redis fallback Machine | `shared-cpu-1x`, 256MB | about `$1.94` |
+| Redis fallback volume | 1GB | about `$0.15` |
 | Backup storage | Tigris or equivalent object storage | depends on selected bucket usage; keep under a few GB for staging |
 | Public outbound bandwidth | bounded smoke/load only | Fly lists North America public egress at `$0.02/GB` |
 
-Provisioning is blocked until this cost preview is explicitly approved.
+The approved fallback footprint is about `$13.75/mo` before traffic, taxes, support, dedicated IPs, larger machines, or backup object storage.
 
 ## Required Input
 
@@ -64,8 +67,8 @@ Provisioning is blocked until this cost preview is explicitly approved.
 - Provide provider credentials through GitHub environment secrets or OIDC.
 - Confirm PostgreSQL 18 and Redis provisioning choices.
 - Confirm backup artifact storage outside the database service filesystem.
-- Approve the cost preview.
-- Install and authenticate `flyctl`.
-- Re-authenticate GitHub CLI.
+- Attach billing to the Fly organization so staging Machines are not stopped by the trial five-minute limit.
+- Complete live Redis BullMQ compatibility verification.
+- Configure app and GitHub environment secrets.
 
-No live deployment, release-candidate tag, hosted backup, restore drill, load test, or rollback demonstration can be completed until the remaining gates above are satisfied.
+No release-candidate tag, hosted backup, restore drill, load test, or rollback demonstration can be completed until the remaining gates above are satisfied.

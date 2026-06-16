@@ -1,6 +1,6 @@
 # Staging Deployment
 
-Status: Fly.io manifests and CI deployment path exist; live deployment is blocked until cost approval, `flyctl` authentication, and GitHub authentication are available.
+Status: Fly.io manifests and CI deployment path exist. Fly app shells, PostgreSQL 18, and private Redis fallback resources have been created. Full live deployment is blocked until billing is attached to the Fly trial organization so Machines can run longer than five minutes.
 
 ## Implemented Repository Commands
 
@@ -37,9 +37,10 @@ The live deployment job is gated by both `vars.STAGING_PLATFORM_CONFIRMED == 'tr
 
 Current check results from this workstation:
 
-- `flyctl version`: failed; `flyctl` is not installed.
-- `fly auth whoami`: failed; `fly` is not installed.
-- `gh auth status`: failed; token for `its-arnavtech` is invalid.
+- `flyctl version`: available at `C:\Users\Arnav\.fly\bin\flyctl.exe`, version `0.4.59`.
+- `fly auth whoami`: `arnavk174@gmail.com`.
+- `fly orgs list`: `personal` / `Arnav Kumar`.
+- `gh auth status`: authenticated as `its-arnavtech`.
 - Docker: available, server version `29.5.2`.
 
 Install and authenticate Fly CLI:
@@ -57,12 +58,13 @@ gh auth login -h github.com
 
 ## Fly Provisioning Commands
 
-Do not run these until cost approval is explicit.
+Provisioned in Fly organization `personal`:
 
 ```powershell
 flyctl apps create autonomous-csa-staging-api --org <fly-org>
 flyctl apps create autonomous-csa-staging-worker --org <fly-org>
 flyctl apps create autonomous-csa-staging-web --org <fly-org>
+flyctl apps create autonomous-csa-staging-redis --org <fly-org>
 ```
 
 PostgreSQL 18 must be pinned to `flyio/postgres-flex:18` or an explicitly verified Fly PostgreSQL 18 offering:
@@ -71,14 +73,17 @@ PostgreSQL 18 must be pinned to `flyio/postgres-flex:18` or an explicitly verifi
 flyctl postgres create --name autonomous-csa-staging-pg18 --org <fly-org> --region ord --image-ref flyio/postgres-flex:18
 ```
 
-Redis must be provisioned only after BullMQ compatibility is verified. Preferred first test is Fly Upstash Redis fixed-price with eviction disabled:
+Hosted PostgreSQL version was verified as `18.3 (Ubuntu 18.3-1.pgdg24.04+1)`.
+
+Preferred Redis was Fly Upstash fixed-price with eviction disabled, but Fly rejected add-on creation for the current trial organization. The fallback Redis app uses:
 
 ```powershell
-flyctl redis create
-flyctl redis status autonomous-csa-staging-redis
+flyctl volumes create redis_data --app autonomous-csa-staging-redis --region ord --size 1 --yes
+flyctl secrets set --app autonomous-csa-staging-redis REDIS_PASSWORD=<staging-only-secret>
+flyctl deploy --app autonomous-csa-staging-redis --config fly.redis.toml
 ```
 
-If compatibility fails, use a dedicated private Redis Fly app with a persistent volume instead.
+Current blocker: Fly stops trial Machines after five minutes until billing is attached. Redis logs show `Trial machine stopping. To run for longer than 5m0s, add a credit card`.
 
 Compatibility command after setting `REDIS_URL` to the candidate Redis endpoint:
 

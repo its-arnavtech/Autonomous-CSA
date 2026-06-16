@@ -1,6 +1,6 @@
 # Staging Architecture
 
-Status: Fly.io target architecture defined; live provisioning is blocked on cost approval and local/auth prerequisites.
+Status: Fly.io target architecture defined. App shells, PostgreSQL 18, and private Redis fallback resources exist in the `personal` organization. Hosted verification is blocked by the Fly trial five-minute machine limit until billing is attached.
 
 ```text
 Internet
@@ -50,7 +50,7 @@ Internal API URL for Fly private networking: `http://autonomous-csa-staging-api.
 
 PostgreSQL app name to use after cost approval: `autonomous-csa-staging-pg18`.
 
-Redis database/service name to use after compatibility approval: `autonomous-csa-staging-redis`.
+Redis service name: `autonomous-csa-staging-redis`. Upstash add-on creation was blocked for the trial organization, so the current resource is a private Redis Fly app with encrypted 1GB volume `redis_data`.
 
 ## Release Identity
 

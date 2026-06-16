@@ -1,6 +1,6 @@
 # Staging Verification
 
-Status: verification plan and automation are present; hosted verification is not complete.
+Status: verification plan and automation are present; hosted verification is not complete. Current blocker is Fly trial billing: staging Machines are stopped after five minutes until billing is attached to the organization.
 
 ## Automated Smoke Test
 
@@ -80,3 +80,10 @@ Automated command:
 ```powershell
 pnpm staging:redis:check
 ```
+
+Live attempt notes:
+
+- PostgreSQL 18 hosted version passed: `18.3 (Ubuntu 18.3-1.pgdg24.04+1)`.
+- Fly Upstash Redis add-on creation was blocked for the trial organization.
+- Private Redis fallback app deployed, but Fly trial limits stopped the Machine after five minutes.
+- The Redis/BullMQ gate cannot be accepted until the fallback Redis service runs durably and `pnpm staging:redis:check` passes against the hosted endpoint.
