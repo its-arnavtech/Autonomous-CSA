@@ -42,6 +42,9 @@ describe('AuthService', () => {
         prisma as never,
         passwordService as never,
         tokenService as never,
+        {
+          assertLoginAllowed: jest.fn().mockResolvedValue(undefined),
+        } as never,
       ),
     };
   }
@@ -173,7 +176,7 @@ describe('AuthService', () => {
     const { prisma, tokenService, service } = createService();
     const tx = {
       refreshSession: {
-        update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         create: jest.fn(),
       },
     };
@@ -216,9 +219,9 @@ describe('AuthService', () => {
       ipAddress: '127.0.0.1',
     });
 
-    expect(tx.refreshSession.update).toHaveBeenCalledWith(
+    expect(tx.refreshSession.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'session_1' },
+        where: expect.objectContaining({ id: 'session_1' }),
       }),
     );
     expect(tx.refreshSession.create).toHaveBeenCalledWith(
@@ -230,6 +233,48 @@ describe('AuthService', () => {
     );
     expect(result.accessToken).toBe('new-access-token');
     expect(result.refreshToken).toBe('new-refresh-token');
+  });
+
+  it('rejects duplicate refresh rotation when the session is already claimed', async () => {
+    const { prisma, tokenService, service } = createService();
+    const tx = {
+      refreshSession: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        create: jest.fn(),
+      },
+    };
+
+    tokenService.verifyRefreshToken
+      .mockReturnValueOnce({ sid: 'session_1', exp: 2_000_000, sub: 'user_1' })
+      .mockReturnValueOnce({ sid: 'session_2', exp: 2_000_500, sub: 'user_1' });
+    tokenService.hashRefreshToken.mockReturnValue('old-hash');
+    tokenService.createRefreshToken.mockReturnValue('new-refresh-token');
+    tokenService.createAccessToken.mockReturnValue('new-access-token');
+    tokenService.getRefreshExpiry.mockReturnValue(new Date('2026-06-22T00:00:00.000Z'));
+    prisma.refreshSession.findUnique.mockResolvedValue({
+      id: 'session_1',
+      tokenHash: 'old-hash',
+      revokedAt: null,
+      expiresAt: new Date('2026-06-21T00:00:00.000Z'),
+      userAgent: 'browser',
+      ipAddress: '127.0.0.1',
+      user: {
+        id: 'user_1',
+        email: 'owner@example.com',
+        isActive: true,
+      },
+    });
+    prisma.$transaction.mockImplementation(
+      async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+    );
+
+    await expect(
+      service.refresh('old-refresh-token', {
+        userAgent: 'browser',
+        ipAddress: '127.0.0.1',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(tx.refreshSession.create).not.toHaveBeenCalled();
   });
 
   it('getMe returns memberships without hashes or token rows', async () => {

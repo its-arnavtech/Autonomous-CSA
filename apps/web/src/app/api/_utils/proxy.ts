@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   CORRELATION_ID_HEADER,
   ensureCorrelationId,
+  loadWebRuntimeConfig,
   normalizeCorrelationId,
 } from '@agentic-support/observability';
 import { webLogger } from './web-logger';
@@ -32,56 +33,16 @@ type AuthPayload = {
   }>;
 };
 
-function isSecureCookieEnabled() {
-  const raw = process.env.AUTH_COOKIE_SECURE?.trim().toLowerCase();
-  if (raw === 'true') {
-    return true;
-  }
-
-  if (raw === 'false') {
-    return false;
-  }
-
-  return process.env.NODE_ENV === 'production';
-}
-
-function getSameSite() {
-  const raw = process.env.AUTH_COOKIE_SAME_SITE?.trim().toLowerCase();
-  if (raw === 'strict') {
-    return 'strict' as const;
-  }
-
-  if (raw === 'none') {
-    return 'none' as const;
-  }
-
-  return 'lax' as const;
+function getWebConfig() {
+  return loadWebRuntimeConfig();
 }
 
 function getAccessCookieMaxAgeSeconds() {
-  return parseDurationToSeconds(process.env.JWT_ACCESS_TTL ?? '15m');
+  return getWebConfig().accessTtlSeconds;
 }
 
 function getRefreshCookieMaxAgeSeconds() {
-  return parseDurationToSeconds(process.env.JWT_REFRESH_TTL ?? '7d');
-}
-
-function parseDurationToSeconds(value: string) {
-  const match = /^(\d+)([smhd])$/i.exec(value.trim());
-  if (!match) {
-    return 15 * 60;
-  }
-
-  const amount = Number.parseInt(match[1], 10);
-  const unit = match[2].toLowerCase();
-  const multiplier: Record<string, number> = {
-    s: 1,
-    m: 60,
-    h: 60 * 60,
-    d: 60 * 60 * 24,
-  };
-
-  return amount * multiplier[unit];
+  return getWebConfig().refreshTtlSeconds;
 }
 
 export function getForwardedHeaders(req: NextRequest) {
@@ -138,8 +99,7 @@ function buildProxyHeaders(params: {
 }
 
 export function getApiBaseUrl() {
-  const raw = process.env.API_BASE_URL?.trim();
-  return (raw || 'http://localhost:3001').replace(/\/+$/, '');
+  return getWebConfig().apiBaseUrl.replace(/\/+$/, '');
 }
 
 function getLogRoute(upstreamUrl: string) {
@@ -163,20 +123,19 @@ export function setAuthCookies(
   payload: AuthPayload,
   organizationId?: string,
 ) {
-  const secure = isSecureCookieEnabled();
-  const sameSite = getSameSite();
+  const config = getWebConfig();
 
   response.cookies.set(ACCESS_COOKIE, payload.accessToken, {
     httpOnly: true,
-    sameSite,
-    secure,
+    sameSite: config.cookieSameSite,
+    secure: config.cookieSecure,
     path: '/',
     maxAge: getAccessCookieMaxAgeSeconds(),
   });
   response.cookies.set(REFRESH_COOKIE, payload.refreshToken, {
     httpOnly: true,
-    sameSite,
-    secure,
+    sameSite: config.cookieSameSite,
+    secure: config.cookieSecure,
     path: '/',
     maxAge: getRefreshCookieMaxAgeSeconds(),
   });
@@ -186,8 +145,8 @@ export function setAuthCookies(
   if (fallbackOrganizationId) {
     response.cookies.set(ORGANIZATION_COOKIE, fallbackOrganizationId, {
       httpOnly: true,
-      sameSite,
-      secure,
+      sameSite: config.cookieSameSite,
+      secure: config.cookieSecure,
       path: '/',
       maxAge: getRefreshCookieMaxAgeSeconds(),
     });
@@ -198,21 +157,23 @@ export function setSelectedOrganizationCookie(
   response: NextResponse,
   organizationId: string,
 ) {
+  const config = getWebConfig();
   response.cookies.set(ORGANIZATION_COOKIE, organizationId, {
     httpOnly: true,
-    sameSite: getSameSite(),
-    secure: isSecureCookieEnabled(),
+    sameSite: config.cookieSameSite,
+    secure: config.cookieSecure,
     path: '/',
     maxAge: getRefreshCookieMaxAgeSeconds(),
   });
 }
 
 export function clearAuthCookies(response: NextResponse) {
+  const config = getWebConfig();
   for (const cookieName of [ACCESS_COOKIE, REFRESH_COOKIE, ORGANIZATION_COOKIE]) {
     response.cookies.set(cookieName, '', {
       httpOnly: true,
-      sameSite: getSameSite(),
-      secure: isSecureCookieEnabled(),
+      sameSite: config.cookieSameSite,
+      secure: config.cookieSecure,
       path: '/',
       maxAge: 0,
     });

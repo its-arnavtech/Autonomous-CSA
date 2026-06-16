@@ -43,3 +43,25 @@ See:
 ## CI/CD
 
 GitHub Actions now cover quality checks, Prisma migration validation, security scanning, Docker build readiness, CodeQL, and Dependabot hygiene. See [docs/CI_CD.md](/C:/Autonomous-CSA/docs/CI_CD.md) for the workflow breakdown, local equivalent commands, and failure handling guidance.
+
+## Phase 10 Hardening
+
+Operational hardening commands:
+
+- `pnpm db:migrate:check`
+- `pnpm db:backup`
+- `pnpm db:restore <backup-file> --target-database-url=...`
+- `pnpm db:backup:verify <backup-file>`
+- `pnpm load:smoke`
+- `pnpm maintenance:cleanup`
+- `./scripts/staging-readiness.sh`
+
+Supporting docs:
+
+- [docs/SECURITY_DEPENDENCIES.md](/C:/Autonomous-CSA/docs/SECURITY_DEPENDENCIES.md)
+- [docs/BACKUP_RESTORE.md](/C:/Autonomous-CSA/docs/BACKUP_RESTORE.md)
+- [docs/LOAD_TESTING.md](/C:/Autonomous-CSA/docs/LOAD_TESTING.md)
+- [docs/MIGRATIONS.md](/C:/Autonomous-CSA/docs/MIGRATIONS.md)
+- [docs/SECRETS.md](/C:/Autonomous-CSA/docs/SECRETS.md)
+- [docs/STAGING_READINESS.md](/C:/Autonomous-CSA/docs/STAGING_READINESS.md)
+- [docs/FAILURE_INJECTION.md](/C:/Autonomous-CSA/docs/FAILURE_INJECTION.md)

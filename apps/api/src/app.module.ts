@@ -10,6 +10,8 @@ import { OperationsModule } from './operations/operations.module';
 import { OrgsModule } from './orgs/orgs.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { QueueModule } from './queue/queue.module';
+import { RateLimitModule } from './rate-limit/rate-limit.module';
+import { ApiShutdownStateService } from './runtime/api-shutdown-state.service';
 import { SupportModule } from './support/support.module';
 import { TicketsModule } from './tickets/tickets.module';
 
@@ -19,6 +21,7 @@ import { TicketsModule } from './tickets/tickets.module';
     SupportModule,
     AuthModule,
     QueueModule,
+    RateLimitModule,
     ObservabilityModule,
     OperationsModule,
     TicketsModule,
@@ -28,6 +31,6 @@ import { TicketsModule } from './tickets/tickets.module';
     KnowledgeModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, ApiShutdownStateService],
 })
 export class AppModule {}

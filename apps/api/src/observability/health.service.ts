@@ -1,26 +1,17 @@
+import {
+  loadApiRuntimeConfig,
+  sanitizeForLog,
+} from '@agentic-support/observability';
 import { Injectable } from '@nestjs/common';
-import { sanitizeForLog } from '@agentic-support/observability';
 import { PrismaService } from '../prisma/prisma.service';
 import Redis from 'ioredis';
+import { ApiShutdownStateService } from '../runtime/api-shutdown-state.service';
 
 type DependencyStatus = {
   status: 'up' | 'down';
   latencyMs?: number;
   error?: string;
 };
-
-function getHealthTimeoutMs() {
-  const parsed = Number.parseInt(
-    process.env.HEALTH_CHECK_TIMEOUT_MS?.trim() ?? '2000',
-    10,
-  );
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 2000;
-}
-
-function getRedisPort() {
-  const parsed = Number.parseInt(process.env.REDIS_PORT?.trim() ?? '6379', 10);
-  return Number.isFinite(parsed) ? parsed : 6379;
-}
 
 function toSafeErrorMessage(error: unknown, fallback: string) {
   if (!(error instanceof Error)) {
@@ -33,7 +24,12 @@ function toSafeErrorMessage(error: unknown, fallback: string) {
 
 @Injectable()
 export class HealthService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly config = loadApiRuntimeConfig();
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly shutdownState: ApiShutdownStateService,
+  ) {}
 
   getLiveStatus() {
     return {
@@ -55,7 +51,8 @@ export class HealthService {
     const status =
       postgres.status === 'up' &&
       redis.status === 'up' &&
-      config.status === 'up'
+      config.status === 'up' &&
+      !this.shutdownState.isShuttingDown()
         ? 'ready'
         : 'not_ready';
 
@@ -88,12 +85,17 @@ export class HealthService {
   }
 
   private async checkRedis(): Promise<DependencyStatus> {
-    const client = new Redis({
-      host: process.env.REDIS_HOST ?? 'localhost',
-      port: getRedisPort(),
-      maxRetriesPerRequest: 0,
-      lazyConnect: true,
-    });
+    const client =
+      typeof this.config.redis.connection === 'string'
+        ? new Redis(this.config.redis.connection, {
+            maxRetriesPerRequest: 0,
+            lazyConnect: true,
+          })
+        : new Redis({
+            ...this.config.redis.connection,
+            maxRetriesPerRequest: 0,
+            lazyConnect: true,
+          });
     const startedAt = Date.now();
 
     try {
@@ -112,19 +114,18 @@ export class HealthService {
   }
 
   private async checkConfig(): Promise<DependencyStatus> {
-    const required = ['DATABASE_URL', 'JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET'];
-    const missing = required.filter((key) => !process.env[key]?.trim());
+    if (this.shutdownState.isShuttingDown()) {
+      return {
+        status: 'down',
+        error: 'Shutdown in progress',
+      };
+    }
 
-    return missing.length === 0
-      ? { status: 'up' }
-      : {
-          status: 'down',
-          error: `Missing required config: ${missing.join(', ')}`,
-        };
+    return { status: 'up' };
   }
 
   private async withTimeout<T>(promise: Promise<T>) {
-    const timeoutMs = getHealthTimeoutMs();
+    const timeoutMs = this.config.healthTimeoutMs;
 
     return Promise.race([
       promise,

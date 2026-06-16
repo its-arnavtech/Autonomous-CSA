@@ -9,8 +9,8 @@ This repository uses GitHub Actions for continuous integration, migration valida
 Runs on pushes to `main` and pull requests targeting `main`.
 
 - `quality`: installs dependencies, generates the Prisma client, then runs lint, typecheck, test, and build.
-- `prisma`: starts PostgreSQL on the Linux runner, applies Prisma migrations with `migrate deploy`, regenerates the client, and validates the schema.
-- `security`: runs `pnpm audit --audit-level high`, scans the repo with Gitleaks, and runs Semgrep with TypeScript, Node.js, and React rules.
+- `prisma`: starts PostgreSQL on the Linux runner, applies Prisma migrations with `migrate deploy`, regenerates the client, validates the schema, and runs `pnpm db:migrate:check` for heuristic migration safety review.
+- `security`: runs `pnpm audit --audit-level high`, validates backup and staging shell syntax, scans the repo with Gitleaks, and runs Semgrep with TypeScript, Node.js, and React rules.
 - `docker`: builds the API, worker, and web Docker images with `push: false` to verify Docker readiness without publishing artifacts.
 
 ### `codeql.yml`
@@ -61,6 +61,7 @@ pnpm typecheck
 pnpm test
 pnpm build
 pnpm db:migrate:deploy
+pnpm db:migrate:check
 pnpm db:validate
 pnpm ci:security
 pnpm ci:docker

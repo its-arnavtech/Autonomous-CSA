@@ -79,6 +79,10 @@ fly.toml
 logs/
 *.log
 run-output/
+backups/
+*.dump
+*.dump.sha256
+*.dump.json
 
 ############################################
 # IDEs / Editors
@@ -102,3 +106,4 @@ $RECYCLE.BIN/
 *.old
 
 tmp-home/
+.claude/

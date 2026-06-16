@@ -94,13 +94,24 @@ export class ApprovalsController {
     );
 
     return this.prisma.$transaction(async (tx) => {
-      const updatedApproval = await tx.humanApproval.update({
-        where: { id: approvalId },
+      const transition = await tx.humanApproval.updateMany({
+        where: {
+          id: approvalId,
+          status: ApprovalStatus.PENDING,
+        },
         data: {
           status: dto.status,
           reviewerNote: dto.reviewerNote,
           reviewedByUserId: user.userId,
         },
+      });
+
+      if (transition.count !== 1) {
+        throw new BadRequestException('Approval has already been decided');
+      }
+
+      const updatedApproval = await tx.humanApproval.findUniqueOrThrow({
+        where: { id: approvalId },
       });
 
       if (approval.outboundDraftId) {
