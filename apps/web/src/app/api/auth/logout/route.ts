@@ -4,13 +4,14 @@ import {
   clearAuthCookies,
   getForwardedHeaders,
   getApiBaseUrl,
+  getAuthCookieNames,
   resolveCorrelationId,
 } from '../../_utils/proxy';
 import { webLogger } from '../../_utils/web-logger';
 
 export async function POST(req: NextRequest) {
   const correlationId = resolveCorrelationId(req);
-  const refreshToken = req.cookies.get('au_refresh_token')?.value;
+  const refreshToken = req.cookies.get(getAuthCookieNames().refresh)?.value;
 
   if (refreshToken) {
     const headers = getForwardedHeaders(req);

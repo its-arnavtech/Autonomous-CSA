@@ -10,7 +10,13 @@ describe('web proxy behavior', () => {
   const originalFetch = global.fetch;
 
   beforeEach(() => {
+    process.env.NODE_ENV = 'test';
+    process.env.APP_ENV = 'test';
     process.env.API_BASE_URL = 'http://api.internal';
+    delete process.env.AUTH_COOKIE_NAME_PREFIX;
+    delete process.env.AUTH_COOKIE_DOMAIN;
+    delete process.env.AUTH_COOKIE_SECURE;
+    delete process.env.AUTH_COOKIE_SAME_SITE;
     global.fetch = jest.fn();
   });
 

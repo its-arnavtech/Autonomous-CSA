@@ -44,6 +44,26 @@ See:
 
 GitHub Actions now cover quality checks, Prisma migration validation, security scanning, Docker build readiness, CodeQL, and Dependabot hygiene. See [docs/CI_CD.md](/C:/Autonomous-CSA/docs/CI_CD.md) for the workflow breakdown, local equivalent commands, and failure handling guidance.
 
+## Phase 11 Staging
+
+Phase 11 staging deployment groundwork defines the staging architecture, environment matrix, deployment order, rollback plan, verification gates, deployment metadata, staging seed command, hosted smoke/load commands, and a gated staging workflow. Live staging deployment is intentionally blocked until the staging platform and credentials are explicit.
+
+Fly.io is now the selected Phase 11 staging platform. The repo includes separate Fly manifests for:
+
+- `fly.web.toml`
+- `fly.api.toml`
+- `fly.worker.toml`
+
+Provisioning remains blocked until the documented cost preview is approved and Fly/GitHub authentication is available.
+
+See:
+
+- [docs/STAGING_PLATFORM_DECISION.md](/C:/Autonomous-CSA/docs/STAGING_PLATFORM_DECISION.md)
+- [docs/STAGING_ARCHITECTURE.md](/C:/Autonomous-CSA/docs/STAGING_ARCHITECTURE.md)
+- [docs/STAGING_ENVIRONMENT.md](/C:/Autonomous-CSA/docs/STAGING_ENVIRONMENT.md)
+- [docs/STAGING_DEPLOYMENT.md](/C:/Autonomous-CSA/docs/STAGING_DEPLOYMENT.md)
+- [docs/STAGING_VERIFICATION.md](/C:/Autonomous-CSA/docs/STAGING_VERIFICATION.md)
+
 ## Phase 10 Hardening
 
 Local Docker infrastructure now uses PostgreSQL 18 for the `postgres` service. PostgreSQL 18 stores data under a version-specific `PGDATA` path (`/var/lib/postgresql/18/docker`) and the Compose volume is mounted at `/var/lib/postgresql` through the new `postgres-data-v18` volume. The previous PostgreSQL 16 volume is intentionally retained as a temporary rollback source until migration sign-off and the agreed retention window have both completed.
@@ -55,6 +75,8 @@ Operational hardening commands:
 - `pnpm db:restore <backup-file> --target-database-url=...`
 - `pnpm db:backup:verify <backup-file>`
 - `pnpm load:smoke`
+- `pnpm load:staging`
+- `pnpm staging:smoke`
 - `pnpm maintenance:cleanup`
 - `./scripts/staging-readiness.sh`
 

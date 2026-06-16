@@ -60,3 +60,9 @@ Validation run from `C:\Autonomous-CSA` during the Phase 8 closeout.
 - Production hardening is implemented on `prod-hardening`, including runtime config validation, graceful shutdown, distributed rate limiting, backup/restore tooling, retention cleanup, Docker hardening, migration safety checks, CI hardening, and runbooks.
 - Local and CI database infrastructure now targets PostgreSQL 18, with a new PostgreSQL 18 volume layout and the old PostgreSQL 16 Docker volume retained for temporary rollback until migration sign-off.
 - The branch is not yet fully marked complete in this status file because merge readiness still depends on the latest verified backup/restore drill, live load/shutdown/outage drills, and final branch push state.
+
+## Phase 11
+
+- Staging deployment groundwork is in progress on `staging-deployment`: platform decision memo, architecture/environment/deployment/rollback/verification docs, staging config validation, deployment metadata endpoints, staging seed guard, smoke/load scripts, and a gated staging workflow are present.
+- Fly.io has been approved as the staging platform. Fly manifests and CI deploy orchestration are present for separate web, API, and worker apps.
+- Live staging deployment remains blocked until cost approval, `flyctl` installation/authentication, GitHub CLI re-authentication, Fly app provisioning, PostgreSQL 18 service creation, Redis BullMQ compatibility verification, app secrets, GitHub environment secrets, and backup artifact destination are complete.

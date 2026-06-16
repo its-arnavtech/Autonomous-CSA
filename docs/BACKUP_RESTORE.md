@@ -68,3 +68,9 @@
 
 - Automated helper coverage currently verifies checksum generation and mismatch rejection, metadata redaction, restore guard behavior, temporary database name generation, and executable discovery including executable paths with spaces.
 - A live `db:backup` and `db:backup:verify` drill still requires a reachable non-production PostgreSQL instance with known credentials from the current terminal session.
+
+## Phase 11 Hosted Staging Gate
+
+No hosted staging backup or restore has been completed yet because the staging platform and backup artifact destination are not selected.
+
+Phase 11 requires PostgreSQL 18 client tools, a non-empty hosted staging dump, checksum verification, redacted metadata, Git SHA and migration count recording, backup storage outside the database service filesystem, restore into a separate verification database, selected row-count comparison, and cleanup of the temporary verification database.

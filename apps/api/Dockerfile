@@ -32,10 +32,13 @@ RUN pnpm --filter @apps/api build
 
 FROM base AS runner
 WORKDIR /app
+ARG APP_VERSION=dev
+ARG GIT_SHA=local
+ARG BUILD_TIMESTAMP=unknown
 ENV NODE_ENV=production
-ENV DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support
-ENV REDIS_HOST=localhost
-ENV REDIS_PORT=6379
+ENV APP_VERSION=$APP_VERSION
+ENV GIT_SHA=$GIT_SHA
+ENV BUILD_TIMESTAMP=$BUILD_TIMESTAMP
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/apps/api ./apps/api
 COPY --from=build --chown=node:node /app/packages/db ./packages/db
@@ -43,5 +46,5 @@ COPY --from=build --chown=node:node /app/packages/observability ./packages/obser
 WORKDIR /app/apps/api
 USER node
 EXPOSE 3001
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD node -e "fetch('http://127.0.0.1:3001/health/live').then((res) => { if (!res.ok) process.exit(1); }).catch(() => process.exit(1))"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD node -e "fetch('http://127.0.0.1:3001/health/ready').then((res) => { if (!res.ok) process.exit(1); }).catch(() => process.exit(1))"
 CMD ["node", "dist/main"]

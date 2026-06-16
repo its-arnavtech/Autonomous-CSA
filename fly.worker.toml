@@ -1,0 +1,46 @@
+app = "autonomous-csa-staging-worker"
+primary_region = "ord"
+kill_signal = "SIGTERM"
+kill_timeout = "35s"
+
+[build]
+  dockerfile = "apps/worker/Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  APP_ENV = "staging"
+  PORT = "3002"
+  AI_PROVIDER = "deterministic"
+  AI_ENABLE_FALLBACK = "true"
+  METRICS_ENABLED = "true"
+  LOG_LEVEL = "info"
+  LOG_FORMAT = "json"
+  LOG_PRETTY = "false"
+  HEALTH_CHECK_TIMEOUT_MS = "2000"
+  WORKER_SHUTDOWN_GRACE_MS = "30000"
+  QUEUE_JOB_ATTEMPTS = "3"
+  QUEUE_BACKOFF_BASE_MS = "1000"
+  QUEUE_REMOVE_ON_COMPLETE_COUNT = "100"
+  QUEUE_REMOVE_ON_FAIL_COUNT = "200"
+  QUEUE_STALLED_INTERVAL_MS = "30000"
+  QUEUE_MAX_STALLED_COUNT = "1"
+
+[checks]
+  [checks.worker_ready]
+    grace_period = "25s"
+    interval = "15s"
+    method = "GET"
+    path = "/health/ready"
+    port = 3002
+    timeout = "5s"
+    type = "http"
+
+[[restart]]
+  policy = "on-failure"
+  retries = 10
+  processes = ["app"]
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  processes = ["app"]
