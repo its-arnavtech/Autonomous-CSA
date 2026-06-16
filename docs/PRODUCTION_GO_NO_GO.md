@@ -1,6 +1,6 @@
 # Production Go/No-Go
 
-Status: checklist created for production review after Phase 11 staging gates pass.
+Status: production is no-go. Phase 11A local/CI staging verification may be completed under the zero-spend policy, but Phase 11B hosted staging verification is explicitly deferred.
 
 | Area | Gate | Status |
 | --- | --- | --- |
@@ -34,4 +34,4 @@ Status: checklist created for production review after Phase 11 staging gates pas
 | Data | Backup retention configured | Hosted pending |
 | Data | Restore drill complete | Hosted pending |
 
-Production review is no-go until all hosted staging gates are complete.
+Production review is no-go until Phase 11B hosted staging gates are explicitly re-enabled and pass. The current zero-spend policy does not approve production deployment, paid hosted staging, or an RC tag based only on local verification.

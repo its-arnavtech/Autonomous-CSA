@@ -1,6 +1,19 @@
 # Staging Verification
 
-Status: verification plan and automation are present; hosted verification is not complete. Current blocker is Fly trial billing: staging Machines are stopped after five minutes until billing is attached to the organization.
+Status: Phase 11A local/CI verification is active. Phase 11B hosted Fly verification is deferred by the zero-spend infrastructure policy. No billing method will be attached to Fly.io, and hosted staging must not be claimed complete.
+
+## Phase 11A Local Commands
+
+```powershell
+pnpm staging:local:up
+pnpm staging:local:verify
+pnpm staging:local:regression
+pnpm staging:local:logs
+pnpm staging:local:down
+pnpm staging:local:reset
+```
+
+`pnpm staging:local:verify` generates ignored local secrets, starts the production Docker stack from `docker-compose.staging.yml`, applies Prisma migrations through the migration container, verifies readiness/version metadata, runs Redis/BullMQ compatibility, runs the guarded staging seed twice for idempotency, runs the staging smoke test, runs the local tenant/RBAC regression gate, and performs local PostgreSQL backup/restore verification.
 
 ## Automated Smoke Test
 
@@ -36,15 +49,31 @@ Coverage:
 - Metrics unauthenticated rejection
 - Logout
 
-## Manual Hosted Gates
+## Local Regression Gate
 
-The following remain blocked until staging exists:
+Command:
 
-- Tenant isolation and forged organization rejection
-- Full RBAC matrix
-- Worker job processing persistence
-- Guardrail persistence
-- CSV export
+```powershell
+pnpm staging:local:regression
+```
+
+Coverage:
+
+- OWNER, ADMIN, AGENT, and VIEWER login
+- `/auth/me` for every seeded role
+- Refresh rotation and revoked refresh rejection
+- Valid organization access
+- Forged organization rejection
+- Read access for all roles
+- Ticket mutation allowed for OWNER, ADMIN, and AGENT
+- Ticket mutation rejected for VIEWER
+- Organization settings management rejected for AGENT
+- Operations summary, runs, failures, audit, and CSV export
+
+## Deferred Hosted Gates
+
+The following remain deferred until the zero-spend policy changes and Phase 11B is explicitly re-enabled:
+
 - Correlation IDs in hosted logs
 - Hosted backup
 - Restore into separate verification database
@@ -54,8 +83,8 @@ The following remain blocked until staging exists:
 - Redis recovery drill
 - Postgres recovery drill
 - LLM failure drills
-- Rollback demonstration
-- Release-candidate tag
+- Hosted rollback demonstration
+- Hosted release-candidate tag
 
 ## Fly-Specific Checks
 
@@ -81,9 +110,9 @@ Automated command:
 pnpm staging:redis:check
 ```
 
-Live attempt notes:
+Hosted Fly attempt notes:
 
 - PostgreSQL 18 hosted version passed: `18.3 (Ubuntu 18.3-1.pgdg24.04+1)`.
-- Fly Upstash Redis add-on creation was blocked for the trial organization.
-- Private Redis fallback app deployed, but Fly trial limits stopped the Machine after five minutes.
-- The Redis/BullMQ gate cannot be accepted until the fallback Redis service runs durably and `pnpm staging:redis:check` passes against the hosted endpoint.
+- Fly Upstash Redis add-on creation required billing configuration for the trial organization.
+- Private Redis fallback app deployed, but trial machines could not remain running longer than five minutes.
+- The Redis/BullMQ hosted gate is deferred by the zero-spend policy. Local/CI Redis/BullMQ verification is the active Phase 11A gate.

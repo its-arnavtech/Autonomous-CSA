@@ -46,15 +46,29 @@ GitHub Actions now cover quality checks, Prisma migration validation, security s
 
 ## Phase 11 Staging
 
-Phase 11 staging deployment groundwork defines the staging architecture, environment matrix, deployment order, rollback plan, verification gates, deployment metadata, staging seed command, hosted smoke/load commands, and a gated staging workflow. Live staging deployment is intentionally blocked until the staging platform and credentials are explicit.
+Phase 11 is split into two tracks:
 
-Fly.io is now the selected Phase 11 staging platform. The repo includes separate Fly manifests for:
+- Phase 11A: zero-cost production-like local and CI staging verification
+- Phase 11B: hosted Fly.io staging deployment, explicitly deferred by the zero-spend infrastructure policy
+
+The Fly.io foundation remains in the repository for future use. The trial verified hosted PostgreSQL `18.3` and provisioned the Redis fallback, but trial machines could not remain running longer than five minutes and no billing method will be attached.
+
+The repo includes separate Fly manifests for future hosted staging:
 
 - `fly.web.toml`
 - `fly.api.toml`
 - `fly.worker.toml`
+- `fly.redis.toml`
 
-Provisioning remains blocked until the documented cost preview is approved and Fly/GitHub authentication is available.
+Active Phase 11A local staging commands:
+
+- `pnpm staging:local:up`
+- `pnpm staging:local:verify`
+- `pnpm staging:local:logs`
+- `pnpm staging:local:down`
+- `pnpm staging:local:reset`
+
+These commands use `docker-compose.staging.yml`, PostgreSQL 18, persistent Redis, production API/worker/web images, a dedicated migration container, generated local-only secrets under ignored `run-output/`, and deterministic LLM behavior. Hosted staging is not complete and production deployment is not approved.
 
 See:
 

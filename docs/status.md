@@ -63,8 +63,9 @@ Validation run from `C:\Autonomous-CSA` during the Phase 8 closeout.
 
 ## Phase 11
 
-- Staging deployment groundwork is in progress on `staging-deployment`: platform decision memo, architecture/environment/deployment/rollback/verification docs, staging config validation, deployment metadata endpoints, staging seed guard, smoke/load scripts, and a gated staging workflow are present.
-- Fly.io has been approved as the staging platform. Fly manifests and CI deploy orchestration are present for separate web, API, and worker apps.
-- Fly app shells for web/API/worker, a PostgreSQL 18 staging service, and a private Redis fallback service have been provisioned in the `personal` Fly organization.
-- Hosted PostgreSQL version was verified as `18.3`. Fly Upstash Redis add-on creation was blocked for the trial organization, so `fly.redis.toml` and `ops/redis/Dockerfile` define the private Redis fallback.
-- Live staging deployment remains blocked until billing is attached to the Fly organization so Machines are not stopped after five minutes, Redis BullMQ compatibility passes, app secrets/GitHub environment secrets are configured, and the hosted smoke/load/backup/rollback gates complete.
+- Phase 11 is split into Phase 11A zero-cost local/CI staging verification and Phase 11B hosted Fly staging deployment.
+- Fly.io remains the future hosted staging platform foundation. Fly manifests and CI deploy orchestration are present for separate web, API, and worker apps.
+- During the trial, Fly app shells for web/API/worker, a PostgreSQL 18 staging service, and a private Redis fallback service were provisioned in the `personal` Fly organization.
+- Hosted PostgreSQL version was verified as `18.3`. Fly Upstash Redis required billing configuration, so `fly.redis.toml` and `ops/redis/Dockerfile` define the private Redis fallback for future use.
+- No billing method will be attached. Hosted Phase 11B gates are deferred by the zero-spend infrastructure policy, not treated as a technical failure.
+- Active Phase 11A work uses `docker-compose.staging.yml`, `.env.staging.example`, and `pnpm staging:local:*` commands to verify production images, PostgreSQL 18, Redis/BullMQ, migrations, seed, smoke, backup, and restore locally/CI without paid services.

@@ -351,21 +351,26 @@ function isLocalHostname(hostname: string) {
     normalized.endsWith('.localhost');
 }
 
+function allowsLocalStaging(env: RuntimeEnv) {
+  return env.ALLOW_LOCAL_STAGING?.trim().toLowerCase() === 'true';
+}
+
 function validateHostedUrl(
   url: URL | null,
   variableName: string,
   appEnv: AppEnv,
+  env: RuntimeEnv,
   errors: string[],
 ) {
   if (!url || appEnv !== 'staging') {
     return;
   }
 
-  if (url.protocol === 'http:') {
+  if (url.protocol === 'http:' && !allowsLocalStaging(env)) {
     errors.push(`${variableName} must use https in staging`);
   }
 
-  if (isLocalHostname(url.hostname)) {
+  if (isLocalHostname(url.hostname) && !allowsLocalStaging(env)) {
     errors.push(`${variableName} must not use localhost in staging`);
   }
 
@@ -518,10 +523,10 @@ export function loadApiRuntimeConfig(env: RuntimeEnv = process.env): ApiRuntimeC
     'postgres:',
     'postgresql:',
   ]);
-  validateHostedUrl(parsedDatabaseUrl, 'DATABASE_URL', appEnv, errors);
+  validateHostedUrl(parsedDatabaseUrl, 'DATABASE_URL', appEnv, env, errors);
   const databaseUrl = parsedDatabaseUrl?.toString() ?? '';
   const redis = parseRedisRuntimeConfig(env, errors);
-  if (appEnv === 'staging' && isLocalHostname(redis.summary.host)) {
+  if (appEnv === 'staging' && isLocalHostname(redis.summary.host) && !allowsLocalStaging(env)) {
     errors.push('REDIS_URL must not use localhost in staging');
   }
   const accessSecret = validateSecret(
@@ -711,7 +716,7 @@ export function loadWorkerRuntimeConfig(
     'postgres:',
     'postgresql:',
   ]);
-  validateHostedUrl(parsedDatabaseUrl, 'DATABASE_URL', appEnv, errors);
+  validateHostedUrl(parsedDatabaseUrl, 'DATABASE_URL', appEnv, env, errors);
   const databaseUrl = parsedDatabaseUrl?.toString() ?? '';
   const provider =
     (env.AI_PROVIDER?.trim().toLowerCase() as
@@ -818,7 +823,7 @@ export function loadWorkerRuntimeConfig(
     },
   };
 
-  if (appEnv === 'staging' && isLocalHostname(config.redis.summary.host)) {
+  if (appEnv === 'staging' && isLocalHostname(config.redis.summary.host) && !allowsLocalStaging(env)) {
     errors.push('REDIS_URL must not use localhost in staging');
   }
 
@@ -873,10 +878,10 @@ export function loadWebRuntimeConfig(env: RuntimeEnv = process.env): WebRuntimeC
     errors,
   );
 
-  validateHostedUrl(apiBaseUrl, 'API_BASE_URL', appEnv, errors);
-  validateHostedUrl(publicWebUrl, 'WEB_PUBLIC_URL', appEnv, errors);
+  validateHostedUrl(apiBaseUrl, 'API_BASE_URL', appEnv, env, errors);
+  validateHostedUrl(publicWebUrl, 'WEB_PUBLIC_URL', appEnv, env, errors);
 
-  if (isProductionLike && !cookieSecure) {
+  if (isProductionLike && !cookieSecure && !allowsLocalStaging(env)) {
     errors.push('AUTH_COOKIE_SECURE must be true in production-like environments');
   }
 
@@ -894,7 +899,7 @@ export function loadWebRuntimeConfig(env: RuntimeEnv = process.env): WebRuntimeC
   }
 
   const cookieDomain = env.AUTH_COOKIE_DOMAIN?.trim() || undefined;
-  if (appEnv === 'staging' && !cookieDomain) {
+  if (appEnv === 'staging' && !cookieDomain && !allowsLocalStaging(env)) {
     errors.push('AUTH_COOKIE_DOMAIN is required in staging');
   }
 

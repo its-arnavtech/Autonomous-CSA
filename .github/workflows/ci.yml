@@ -77,8 +77,18 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agentic_support
+      REDIS_URL: redis://localhost:6379
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -106,6 +116,9 @@ jobs:
 
       - name: Check migration safety
         run: pnpm db:migrate:check
+
+      - name: Verify Redis BullMQ compatibility
+        run: pnpm staging:redis:check
 
   security:
     runs-on: ubuntu-latest
@@ -190,3 +203,8 @@ jobs:
           file: ./apps/web/Dockerfile
           push: false
           tags: autonomous-csa-web:ci
+
+      - name: Validate local staging compose config
+        run: |
+          cp .env.staging.example run-output.env
+          docker compose --env-file run-output.env -f docker-compose.staging.yml config

@@ -78,6 +78,28 @@ describe('runtime configuration validation', () => {
     ).toThrow(/DATABASE_URL|REDIS_URL/);
   });
 
+  it('accepts explicit local staging runtime settings for compose verification', () => {
+    expect(
+      loadWebRuntimeConfig({
+        NODE_ENV: 'production',
+        APP_ENV: 'staging',
+        ALLOW_LOCAL_STAGING: 'true',
+        API_BASE_URL: 'http://api:3001',
+        WEB_PUBLIC_URL: 'http://web:3000',
+        AUTH_COOKIE_SECURE: 'false',
+        AUTH_COOKIE_SAME_SITE: 'lax',
+        AUTH_COOKIE_NAME_PREFIX: 'stg_local',
+        JWT_ACCESS_TTL: '15m',
+        JWT_REFRESH_TTL: '7d',
+      }),
+    ).toMatchObject({
+      appEnv: 'staging',
+      apiBaseUrl: 'http://api:3001/',
+      cookieSecure: false,
+      cookieNamePrefix: 'stg_local',
+    });
+  });
+
   it('disables Swagger by default in staging', () => {
     expect(
       loadApiRuntimeConfig({

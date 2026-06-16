@@ -1,6 +1,12 @@
 # Staging Platform Decision Memo
 
-Status: Fly.io approved for Phase 11 staging. Core app shells, PostgreSQL 18, and a private Redis fallback app have been provisioned in the `personal` Fly organization. Remaining hosted gates are blocked until the Fly trial organization has billing attached, because trial machines are stopped after five minutes.
+Status: Phase 11 is split into zero-cost Phase 11A local/CI staging verification and Phase 11B hosted staging deployment. Fly.io remains the selected hosted platform foundation for future use, but Phase 11B is explicitly deferred by the zero-spend infrastructure policy. No billing method will be attached, no paid resources will be created, and no additional live Fly resources should be provisioned.
+
+## Zero-Cost Decision
+
+Fly.io app manifests, deployment workflow scaffolding, and runbooks remain in the repository. During the Fly trial, the API, worker, web, PostgreSQL 18, and Redis fallback app shells were created; hosted PostgreSQL was verified as `18.3 (Ubuntu 18.3-1.pgdg24.04+1)`. The Redis fallback was also provisioned, but trial machines could not remain running longer than five minutes.
+
+This is an explicit infrastructure-cost decision, not a technical failure. Hosted staging gates are deferred because the project will not attach billing information to Fly.io or move to another provider that requires billing information.
 
 ## Repository Signals
 
@@ -19,7 +25,7 @@ Status: Fly.io approved for Phase 11 staging. Core app shells, PostgreSQL 18, an
 
 ## Decision
 
-Fly.io is the selected Phase 11 staging platform. It best matches the current Docker-based architecture, supports separate long-running API, worker, and web services, and has native release/rollback concepts.
+Fly.io is the selected future hosted staging platform. It best matches the current Docker-based architecture, supports separate long-running API, worker, and web services, and has native release/rollback concepts. The Fly foundation is complete enough to keep for a future paid-hosting decision, but it is not part of the active zero-cost Phase 11A gate.
 
 ## PostgreSQL Decision
 
@@ -37,11 +43,25 @@ Do not provision Fly Managed Postgres unless Fly explicitly exposes PostgreSQL 1
 
 Use Fly-integrated Upstash Redis only on a fixed-price plan with eviction disabled if a live BullMQ compatibility test passes. Fly's Upstash docs explicitly call out BullMQ workloads and recommend fixed-price plans for BullMQ-like software. Upstash documents private Fly organization connectivity, backups, transactions, key expiry, and eviction controls.
 
-Fly Upstash add-on creation was attempted for `autonomous-csa-staging-redis`, but Fly rejected add-on creation for the trial organization until billing is configured. The fallback is now a dedicated private Redis Fly app using `fly.redis.toml`, `ops/redis/Dockerfile`, a `shared-cpu-1x` 256MB Machine, and a 1GB encrypted `redis_data` volume.
+Fly Upstash add-on creation was attempted for `autonomous-csa-staging-redis`, but Fly add-ons require billing configuration for the trial organization. The fallback is a dedicated private Redis Fly app using `fly.redis.toml`, `ops/redis/Dockerfile`, a `shared-cpu-1x` 256MB Machine, and a 1GB encrypted `redis_data` volume.
 
-The fallback Redis service still must pass the live BullMQ compatibility gate for `Queue`, `Worker`, `QueueEvents`, delayed jobs, Lua scripts, streams, reconnect behavior, transactions, and key expiry before API/worker deployment can proceed.
+The fallback Redis service still must pass the live BullMQ compatibility gate for `Queue`, `Worker`, `QueueEvents`, delayed jobs, Lua scripts, streams, reconnect behavior, transactions, and key expiry before Phase 11B can proceed. Under the zero-spend policy, this hosted gate is deferred.
 
-## Cost Preview
+## Phase 11A Local/CI Staging
+
+Active staging verification moves to `docker-compose.staging.yml` and `.env.staging.example`.
+
+Phase 11A runs production Docker images locally and in CI without paid services:
+
+- PostgreSQL 18
+- Redis with append-only persistence
+- API, worker, and web production builds
+- a dedicated migration container as sole migration owner
+- staging-only runtime validation via `ALLOW_LOCAL_STAGING=true`
+- generated local secrets in ignored `run-output/staging-local.env`
+- smoke, Redis/BullMQ, backup, restore, and bounded load gates where tooling is available
+
+## Deferred Hosted Cost Preview
 
 Smallest practical staging estimate in `ord`, running continuously:
 
@@ -58,7 +78,7 @@ Smallest practical staging estimate in `ord`, running continuously:
 | Backup storage | Tigris or equivalent object storage | depends on selected bucket usage; keep under a few GB for staging |
 | Public outbound bandwidth | bounded smoke/load only | Fly lists North America public egress at `$0.02/GB` |
 
-The approved fallback footprint is about `$13.75/mo` before traffic, taxes, support, dedicated IPs, larger machines, or backup object storage.
+The fallback footprint would be about `$13.75/mo` before traffic, taxes, support, dedicated IPs, larger machines, or backup object storage. This is documented only for future planning; it is not approved for spend under the current zero-cost policy.
 
 ## Required Input
 
@@ -67,8 +87,9 @@ The approved fallback footprint is about `$13.75/mo` before traffic, taxes, supp
 - Provide provider credentials through GitHub environment secrets or OIDC.
 - Confirm PostgreSQL 18 and Redis provisioning choices.
 - Confirm backup artifact storage outside the database service filesystem.
-- Attach billing to the Fly organization so staging Machines are not stopped by the trial five-minute limit.
-- Complete live Redis BullMQ compatibility verification.
-- Configure app and GitHub environment secrets.
+- Complete Phase 11A local and CI staging gates.
+- Do not attach billing to Fly.io.
+- Do not provision additional hosted resources.
+- Keep hosted Fly deployment manual and disabled unless the zero-spend policy changes.
 
-No release-candidate tag, hosted backup, restore drill, load test, or rollback demonstration can be completed until the remaining gates above are satisfied.
+No hosted release-candidate tag, hosted backup, hosted restore drill, hosted load test, or hosted rollback demonstration can be completed while Phase 11B is deferred.

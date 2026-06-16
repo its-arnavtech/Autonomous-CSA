@@ -39,6 +39,19 @@ test('smoke config parsing supports redacted output without password', () => {
   });
 });
 
+test('smoke config parsing allows explicit local staging profile', () => {
+  const config = getStagingSmokeConfig({
+    ALLOW_LOCAL_STAGING: 'true',
+    STAGING_WEB_URL: 'http://localhost:3100',
+    STAGING_API_URL: 'http://localhost:3101',
+    STAGING_SMOKE_EMAIL: 'owner@staging.autonomous-csa.test',
+    STAGING_SMOKE_PASSWORD: 'SuperSecretPassword123!',
+  });
+
+  assert.equal(config.webUrl, 'http://localhost:3100');
+  assert.equal(config.apiUrl, 'http://localhost:3101');
+});
+
 test('staging seed guard refuses non-staging environments', () => {
   assert.throws(
     () => validateStagingSeedEnv({
@@ -46,6 +59,21 @@ test('staging seed guard refuses non-staging environments', () => {
       DATABASE_URL: 'postgresql://postgres:postgres@db-staging.example.net:5432/autonomous_csa_staging',
     }),
     /APP_ENV=staging/,
+  );
+});
+
+test('staging seed guard allows explicit local staging database', () => {
+  assert.doesNotThrow(() =>
+    validateStagingSeedEnv({
+      ALLOW_LOCAL_STAGING: 'true',
+      APP_ENV: 'staging',
+      DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/agentic_support_staging',
+      STAGING_OWNER_EMAIL: 'owner@staging.autonomous-csa.test',
+      STAGING_ADMIN_EMAIL: 'admin@staging.autonomous-csa.test',
+      STAGING_AGENT_EMAIL: 'agent@staging.autonomous-csa.test',
+      STAGING_VIEWER_EMAIL: 'viewer@staging.autonomous-csa.test',
+      STAGING_USER_PASSWORD_HASH: '$argon2id$v=19$m=1,t=1,p=1$dGVzdA$dGVzdA',
+    }),
   );
 });
 

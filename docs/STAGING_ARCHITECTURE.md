@@ -1,6 +1,6 @@
 # Staging Architecture
 
-Status: Fly.io target architecture defined. App shells, PostgreSQL 18, and private Redis fallback resources exist in the `personal` organization. Hosted verification is blocked by the Fly trial five-minute machine limit until billing is attached.
+Status: Phase 11A local/CI architecture is active. Phase 11B Fly.io hosted architecture is defined and partially trial-provisioned, but hosted verification is deferred by the zero-spend infrastructure policy.
 
 ```text
 Internet
@@ -35,6 +35,19 @@ PostgreSQL 18 database (private)
 | Backups | External artifact store | Must not store the only backup on the database service filesystem. |
 | Logs | Staging-only stream | Must not share production log credentials or sinks. |
 | Metrics | Staging-only protected endpoint/sink | `/metrics` requires `METRICS_AUTH_TOKEN` in production-like environments. |
+
+## Phase 11A Local Topology
+
+`docker-compose.staging.yml` mirrors the required topology without paid services:
+
+| Component | Service | Notes |
+| --- | --- | --- |
+| Web | `web` | Production Next.js image, exposed on host port `3100`. |
+| API | `api` | Production NestJS image, exposed on host port `3101`. |
+| Worker | `worker` | Production worker image, health exposed on host port `3102`. |
+| Migration owner | `migration` | One-shot API image command running Prisma `migrate deploy`. |
+| PostgreSQL | `postgres` | `postgres:18-alpine`, persistent `staging-postgres-v18` volume. |
+| Redis | `redis` | `redis:7-alpine`, append-only persistence, persistent `staging-redis-data` volume. |
 
 ## Current URLs
 

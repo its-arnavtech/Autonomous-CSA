@@ -21,13 +21,19 @@ function assertNotProductionLooking(url, name) {
   }
 }
 
+function allowsLocalStaging(env) {
+  return env.ALLOW_LOCAL_STAGING?.trim().toLowerCase() === 'true';
+}
+
 export function parseHostedHttpUrl(env, name) {
   const raw = required(env, name);
   const url = new URL(raw);
-  if (url.protocol !== 'https:') {
+  if (url.protocol !== 'https:' && !(allowsLocalStaging(env) && url.protocol === 'http:')) {
     throw new Error(`${name} must use https in staging`);
   }
-  assertNotLocalUrl(url, name);
+  if (!allowsLocalStaging(env)) {
+    assertNotLocalUrl(url, name);
+  }
   assertNotProductionLooking(url, name);
   return url;
 }
@@ -38,7 +44,9 @@ export function parseHostedPostgresUrl(env, name = 'DATABASE_URL') {
   if (!['postgres:', 'postgresql:'].includes(url.protocol)) {
     throw new Error(`${name} must use postgres:// or postgresql://`);
   }
-  assertNotLocalUrl(url, name);
+  if (!allowsLocalStaging(env)) {
+    assertNotLocalUrl(url, name);
+  }
   assertNotProductionLooking(url, name);
   return url;
 }

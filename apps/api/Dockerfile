@@ -25,6 +25,7 @@ RUN pnpm install --frozen-lockfile
 COPY apps/api apps/api
 COPY packages/db packages/db
 COPY packages/observability packages/observability
+COPY scripts/lib scripts/lib
 RUN pnpm db:generate
 RUN pnpm --filter @agentic-support/db build
 RUN pnpm --filter @agentic-support/observability build
@@ -43,6 +44,7 @@ COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/apps/api ./apps/api
 COPY --from=build --chown=node:node /app/packages/db ./packages/db
 COPY --from=build --chown=node:node /app/packages/observability ./packages/observability
+COPY --from=build --chown=node:node /app/scripts/lib ./scripts/lib
 WORKDIR /app/apps/api
 USER node
 EXPOSE 3001
