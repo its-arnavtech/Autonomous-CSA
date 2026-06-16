@@ -7,6 +7,7 @@ import {
   SUPPORT_DEAD_LETTER_QUEUE_NAME,
   SUPPORT_QUEUE_NAME,
 } from './queue.config';
+import { QueueLifecycleService } from './queue-lifecycle.service';
 
 const queueDefaults = getQueueDefaults();
 
@@ -32,6 +33,7 @@ const queueDefaults = getQueueDefaults();
     BullModule.registerQueue({ name: SUPPORT_DEAD_LETTER_QUEUE_NAME }),
   ],
   controllers: [QueueController],
+  providers: [QueueLifecycleService],
   exports: [BullModule],
 })
 export class QueueModule {}

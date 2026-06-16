@@ -7,6 +7,22 @@ export const SUPPORT_QUEUE_NAME = 'support';
 export const SUPPORT_DEAD_LETTER_QUEUE_NAME = 'support-dead-letter';
 
 export function getQueueConnection() {
+  const redisUrl = process.env.REDIS_URL?.trim();
+  if (redisUrl) {
+    const parsed = new URL(redisUrl);
+    return {
+      host: parsed.hostname,
+      port: parsed.port ? Number.parseInt(parsed.port, 10) : 6379,
+      username: parsed.username || undefined,
+      password: parsed.password || undefined,
+      db:
+        parsed.pathname && parsed.pathname !== '/'
+          ? Number.parseInt(parsed.pathname.slice(1), 10)
+          : undefined,
+      tls: parsed.protocol === 'rediss:' ? {} : undefined,
+    };
+  }
+
   return {
     host: process.env.REDIS_HOST ?? 'localhost',
     port: parseInteger(process.env.REDIS_PORT, 6379),

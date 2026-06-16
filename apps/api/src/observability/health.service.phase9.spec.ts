@@ -33,7 +33,9 @@ describe('Phase 9 API health service', () => {
 
   it('returns live status without dependency checks', () => {
     const prisma = { $queryRaw: jest.fn() };
-    const service = new HealthService(prisma as never);
+    const service = new HealthService(prisma as never, {
+      isShuttingDown: () => false,
+    } as never);
 
     expect(service.getLiveStatus()).toMatchObject({
       status: 'ok',
@@ -44,7 +46,9 @@ describe('Phase 9 API health service', () => {
 
   it('returns ready when Postgres, Redis, and config are healthy', async () => {
     const prisma = { $queryRaw: jest.fn().mockResolvedValue([{ '?column?': 1 }]) };
-    const service = new HealthService(prisma as never);
+    const service = new HealthService(prisma as never, {
+      isShuttingDown: () => false,
+    } as never);
 
     const result = await service.getReadyStatus();
 
@@ -62,7 +66,9 @@ describe('Phase 9 API health service', () => {
           new Error('connect ECONNREFUSED postgresql://postgres:secret@db/app'),
         ),
     };
-    const service = new HealthService(prisma as never);
+    const service = new HealthService(prisma as never, {
+      isShuttingDown: () => false,
+    } as never);
 
     const result = await service.getReadyStatus();
 
@@ -74,7 +80,9 @@ describe('Phase 9 API health service', () => {
 
   it('fails readiness when Redis is unavailable and recovers after Redis is healthy again', async () => {
     const prisma = { $queryRaw: jest.fn().mockResolvedValue([{ '?column?': 1 }]) };
-    const service = new HealthService(prisma as never);
+    const service = new HealthService(prisma as never, {
+      isShuttingDown: () => false,
+    } as never);
 
     redisState.connect.mockRejectedValueOnce(new Error('redis://secret@cache:6379'));
     const failed = await service.getReadyStatus();
@@ -94,7 +102,9 @@ describe('Phase 9 API health service', () => {
       $queryRaw: jest.fn().mockImplementation(() => new Promise(() => undefined)),
     };
     redisState.connect.mockImplementation(() => new Promise(() => undefined));
-    const service = new HealthService(prisma as never);
+    const service = new HealthService(prisma as never, {
+      isShuttingDown: () => false,
+    } as never);
 
     const startedAt = Date.now();
     const result = await service.getReadyStatus();
@@ -102,5 +112,17 @@ describe('Phase 9 API health service', () => {
 
     expect(result.status).toBe('not_ready');
     expect(elapsedMs).toBeLessThan(200);
+  });
+
+  it('reports not ready while shutdown is in progress', async () => {
+    const prisma = { $queryRaw: jest.fn().mockResolvedValue([{ '?column?': 1 }]) };
+    const service = new HealthService(prisma as never, {
+      isShuttingDown: () => true,
+    } as never);
+
+    const result = await service.getReadyStatus();
+
+    expect(result.status).toBe('not_ready');
+    expect(result.dependencies.config.error).toBe('Shutdown in progress');
   });
 });

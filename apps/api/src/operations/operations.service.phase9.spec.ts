@@ -54,6 +54,7 @@ describe('Phase 9 operations service', () => {
       },
       operationalFailure: {
         findFirst: jest.fn().mockResolvedValue(failure),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         update: jest
           .fn()
           .mockResolvedValue({ ...failure, replayedJobId: 'support-run_replay_1' }),
@@ -138,6 +139,16 @@ describe('Phase 9 operations service', () => {
       replayJobId: 'support-existing',
       duplicateReplay: true,
     });
+    expect(queue.add).not.toHaveBeenCalled();
+  });
+
+  it('treats a lost replay claim as a duplicate replay attempt', async () => {
+    const { service, prisma, queue } = createService();
+    prisma.operationalFailure.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    const result = await service.replayFailure('org_1', 'failure_1', 'user_1');
+
+    expect(result.duplicateReplay).toBe(true);
     expect(queue.add).not.toHaveBeenCalled();
   });
 

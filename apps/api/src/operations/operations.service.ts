@@ -11,6 +11,7 @@ import {
   getCorrelationContext,
   sanitizeForLog,
 } from '@agentic-support/observability';
+import { randomUUID } from 'crypto';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Queue } from 'bullmq';
@@ -235,91 +236,130 @@ export class OperationsService {
       };
     }
 
-    const sourceRun = failure.runId
-      ? await this.prisma.agentRun.findFirst({
-          where: { id: failure.runId, orgId },
-          select: { trigger: true },
-        })
-      : null;
-    const ticket = failure.ticketId
-      ? await this.prisma.ticket.findFirst({
-          where: { id: failure.ticketId, orgId },
-          include: {
-            messages: {
-              where: { direction: MessageDirection.INBOUND },
-              orderBy: { createdAt: 'asc' },
-              take: 1,
-            },
-          },
-        })
-      : null;
+    const replayClaim = `pending:${randomUUID()}`;
+    const claimResult = await this.prisma.operationalFailure.updateMany({
+      where: {
+        id: failure.id,
+        replayedJobId: null,
+      },
+      data: {
+        replayedJobId: replayClaim,
+      },
+    });
 
-    if (!ticket || ticket.messages.length === 0) {
-      throw new NotFoundException('Ticket context for replay no longer exists');
+    if (claimResult.count !== 1) {
+      const duplicate = await this.getFailure(orgId, failureId);
+      return {
+        failureId: duplicate.id,
+        replayRunId: null,
+        replayJobId: duplicate.replayedJobId,
+        correlationId:
+          getCorrelationContext()?.correlationId ??
+          duplicate.correlationId ??
+          null,
+        duplicateReplay: true,
+      };
     }
 
-    const replayCorrelationId =
-      getCorrelationContext()?.correlationId ?? failure.correlationId ?? null;
-    const replayRun = await this.prisma.agentRun.create({
-      data: {
-        orgId,
-        ticketId: ticket.id,
-        status: AgentRunStatus.QUEUED,
-        trigger: sourceRun?.trigger ?? AgentRunTrigger.TICKET_CREATED,
-        correlationId: replayCorrelationId,
-      },
-    });
+    try {
+      const sourceRun = failure.runId
+        ? await this.prisma.agentRun.findFirst({
+            where: { id: failure.runId, orgId },
+            select: { trigger: true },
+          })
+        : null;
+      const ticket = failure.ticketId
+        ? await this.prisma.ticket.findFirst({
+            where: { id: failure.ticketId, orgId },
+            include: {
+              messages: {
+                where: { direction: MessageDirection.INBOUND },
+                orderBy: { createdAt: 'asc' },
+                take: 1,
+              },
+            },
+          })
+        : null;
 
-    const job = await this.queue.add(
-      'ticket.process',
-      {
-        orgId,
-        runId: replayRun.id,
-        ticketId: ticket.id,
-        subject: ticket.subject,
-        body: ticket.messages[0].body,
-        customerEmail: ticket.customerEmail,
-        requestedByUserId: actorUserId,
-        correlationId: replayCorrelationId,
-        triggerType: 'FAILURE_REPLAY',
-        enqueuedAt: new Date().toISOString(),
-      },
-      {
-        jobId: `support-${replayRun.id}`,
-      },
-    );
+      if (!ticket || ticket.messages.length === 0) {
+        throw new NotFoundException('Ticket context for replay no longer exists');
+      }
 
-    await this.prisma.operationalFailure.update({
-      where: { id: failure.id },
-      data: {
-        replayedJobId: String(job.id),
-      },
-    });
-
-    await this.prisma.$transaction(async (tx) => {
-      const sequence = await nextEventSequence(tx, orgId, ticket.id);
-      await tx.agentEvent.create({
+      const replayCorrelationId =
+        getCorrelationContext()?.correlationId ?? failure.correlationId ?? null;
+      const replayRun = await this.prisma.agentRun.create({
         data: {
           orgId,
           ticketId: ticket.id,
-          runId: replayRun.id,
+          status: AgentRunStatus.QUEUED,
+          trigger: sourceRun?.trigger ?? AgentRunTrigger.TICKET_CREATED,
           correlationId: replayCorrelationId,
-          type: AgentEventType.RUN_QUEUED,
-          sequence,
-          payload: {
-            replayOfFailureId: failure.id,
-            actorUserId,
-          },
         },
       });
-    });
 
-    return {
-      failureId: failure.id,
-      replayRunId: replayRun.id,
-      replayJobId: String(job.id),
-      correlationId: replayCorrelationId,
-    };
+      const job = await this.queue.add(
+        'ticket.process',
+        {
+          orgId,
+          runId: replayRun.id,
+          ticketId: ticket.id,
+          subject: ticket.subject,
+          body: ticket.messages[0].body,
+          customerEmail: ticket.customerEmail,
+          requestedByUserId: actorUserId,
+          correlationId: replayCorrelationId,
+          triggerType: 'FAILURE_REPLAY',
+          enqueuedAt: new Date().toISOString(),
+        },
+        {
+          jobId: `support-${replayRun.id}`,
+        },
+      );
+
+      await this.prisma.operationalFailure.update({
+        where: { id: failure.id },
+        data: {
+          replayedJobId: String(job.id),
+        },
+      });
+
+      await this.prisma.$transaction(async (tx) => {
+        const sequence = await nextEventSequence(tx, orgId, ticket.id);
+        await tx.agentEvent.create({
+          data: {
+            orgId,
+            ticketId: ticket.id,
+            runId: replayRun.id,
+            correlationId: replayCorrelationId,
+            type: AgentEventType.RUN_QUEUED,
+            sequence,
+            payload: {
+              replayOfFailureId: failure.id,
+              actorUserId,
+            },
+          },
+        });
+      });
+
+      return {
+        failureId: failure.id,
+        replayRunId: replayRun.id,
+        replayJobId: String(job.id),
+        correlationId: replayCorrelationId,
+      };
+    } catch (error) {
+      await this.prisma.operationalFailure.updateMany({
+        where: {
+          id: failure.id,
+          replayedJobId: replayClaim,
+        },
+        data: {
+          replayedJobId: null,
+        },
+      });
+
+      throw error;
+    }
   }
 
   async resolveFailure(

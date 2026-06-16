@@ -18,6 +18,7 @@ import { GuardrailService } from './guardrails/guardrail.service';
 import { LlmService } from './llm/llm.service';
 import { ObservabilityModule } from './observability/observability.module';
 import { PrismaModule } from './prisma.module';
+import { QueueLifecycleService } from './queue/queue-lifecycle.service';
 
 const queueDefaults = getQueueDefaults();
 
@@ -55,6 +56,7 @@ const queueDefaults = getQueueDefaults();
     CriticAgent,
     GuardrailService,
     LlmService,
+    QueueLifecycleService,
   ],
 })
 export class AppModule {}

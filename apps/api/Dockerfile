@@ -1,10 +1,10 @@
-FROM node:22-bookworm-slim AS base
+FROM node:22.11.0-bookworm-slim AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 RUN apt-get update \
   && apt-get install -y --no-install-recommends openssl \
   && rm -rf /var/lib/apt/lists/*
-RUN corepack enable
+RUN npm install -g pnpm@10.29.1
 
 FROM base AS build
 WORKDIR /app
@@ -36,11 +36,12 @@ ENV NODE_ENV=production
 ENV DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support
 ENV REDIS_HOST=localhost
 ENV REDIS_PORT=6379
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/apps/api ./apps/api
-COPY --from=build /app/packages/db ./packages/db
-COPY --from=build /app/packages/observability ./packages/observability
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/apps/api ./apps/api
+COPY --from=build --chown=node:node /app/packages/db ./packages/db
+COPY --from=build --chown=node:node /app/packages/observability ./packages/observability
 WORKDIR /app/apps/api
+USER node
 EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD node -e "fetch('http://127.0.0.1:3001/health/live').then((res) => { if (!res.ok) process.exit(1); }).catch(() => process.exit(1))"
 CMD ["node", "dist/main"]

@@ -31,7 +31,9 @@ describe('Phase 9 worker health service', () => {
 
   it('matches the API health payload shape for live checks', () => {
     const prisma = { $queryRaw: jest.fn() };
-    const service = new HealthService(prisma as never);
+    const service = new HealthService(prisma as never, {
+      isShuttingDown: () => false,
+    } as never);
 
     expect(service.getLiveStatus()).toMatchObject({
       status: 'ok',
@@ -43,7 +45,9 @@ describe('Phase 9 worker health service', () => {
 
   it('returns ready when dependencies are healthy', async () => {
     const prisma = { $queryRaw: jest.fn().mockResolvedValue([{ '?column?': 1 }]) };
-    const service = new HealthService(prisma as never);
+    const service = new HealthService(prisma as never, {
+      isShuttingDown: () => false,
+    } as never);
 
     const result = await service.getReadyStatus();
 
@@ -56,12 +60,26 @@ describe('Phase 9 worker health service', () => {
   it('fails readiness when Redis is unavailable', async () => {
     const prisma = { $queryRaw: jest.fn().mockResolvedValue([{ '?column?': 1 }]) };
     redisState.connect.mockRejectedValue(new Error('redis://secret@cache:6379'));
-    const service = new HealthService(prisma as never);
+    const service = new HealthService(prisma as never, {
+      isShuttingDown: () => false,
+    } as never);
 
     const result = await service.getReadyStatus();
 
     expect(result.status).toBe('not_ready');
     expect(result.dependencies.redis.status).toBe('down');
     expect(result.dependencies.redis.error).not.toContain('secret');
+  });
+
+  it('reports shutdown as not ready', async () => {
+    const prisma = { $queryRaw: jest.fn().mockResolvedValue([{ '?column?': 1 }]) };
+    const service = new HealthService(prisma as never, {
+      isShuttingDown: () => true,
+    } as never);
+
+    const result = await service.getReadyStatus();
+
+    expect(result.status).toBe('not_ready');
+    expect(result.dependencies.config.error).toBe('Shutdown in progress');
   });
 });

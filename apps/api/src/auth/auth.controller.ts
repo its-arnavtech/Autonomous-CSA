@@ -15,16 +15,9 @@ import { JwtAccessGuard } from './jwt-access.guard';
 import { LoginDto, LogoutDto, RefreshTokenDto, RegisterDto } from './auth.dto';
 
 function getRequestMetadata(request: Request) {
-  const forwardedFor = request.headers['x-forwarded-for'];
-  const ipAddress = Array.isArray(forwardedFor)
-    ? forwardedFor[0]
-    : typeof forwardedFor === 'string'
-      ? forwardedFor.split(',')[0]?.trim() ?? null
-      : request.ip ?? null;
-
   return {
     userAgent: request.get('user-agent') ?? null,
-    ipAddress,
+    ipAddress: request.ip ?? null,
   };
 }
 

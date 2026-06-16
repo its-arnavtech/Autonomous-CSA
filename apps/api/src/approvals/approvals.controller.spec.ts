@@ -7,6 +7,8 @@ describe('ApprovalsController', () => {
       agentRun: { findFirst: jest.fn() },
       humanApproval: {
         create: jest.fn(),
+        updateMany: jest.fn(),
+        findUniqueOrThrow: jest.fn(),
         update: jest.fn(),
       },
       outboundDraft: {
@@ -100,7 +102,10 @@ describe('ApprovalsController', () => {
         async (callback: (tx: typeof prisma) => Promise<unknown>) =>
           callback(prisma),
       );
-      prisma.humanApproval.update.mockResolvedValue({
+      prisma.humanApproval.updateMany.mockResolvedValue({
+        count: 1,
+      });
+      prisma.humanApproval.findUniqueOrThrow.mockResolvedValue({
         id: 'approval_1',
         status: decision,
       });
@@ -123,8 +128,8 @@ describe('ApprovalsController', () => {
         } as never,
       );
 
-      expect(prisma.humanApproval.update).toHaveBeenCalledWith({
-        where: { id: 'approval_1' },
+      expect(prisma.humanApproval.updateMany).toHaveBeenCalledWith({
+        where: { id: 'approval_1', status: 'PENDING' },
         data: {
           status: decision,
           reviewerNote: 'Reviewed by QA',

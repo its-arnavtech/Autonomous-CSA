@@ -10,6 +10,7 @@ import { OperationsModule } from './operations/operations.module';
 import { OrgsModule } from './orgs/orgs.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { QueueModule } from './queue/queue.module';
+import { RateLimitModule } from './rate-limit/rate-limit.module';
 import { SupportModule } from './support/support.module';
 import { TicketsModule } from './tickets/tickets.module';
 
@@ -19,6 +20,7 @@ import { TicketsModule } from './tickets/tickets.module';
     SupportModule,
     AuthModule,
     QueueModule,
+    RateLimitModule,
     ObservabilityModule,
     OperationsModule,
     TicketsModule,

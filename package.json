@@ -9,14 +9,20 @@
   "scripts": {
     "dev": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support REDIS_HOST=localhost REDIS_PORT=6379 turbo dev",
     "build": "turbo build",
+    "db:backup": "node scripts/db-backup.mjs",
+    "db:restore": "node scripts/db-restore.mjs",
+    "db:backup:verify": "node scripts/db-backup-verify.mjs",
     "db:generate": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support pnpm --filter @agentic-support/db db:generate",
     "db:migrate": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support pnpm --filter @agentic-support/db db:migrate",
+    "db:migrate:check": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support pnpm --filter @agentic-support/db db:migrate:check",
     "db:migrate:deploy": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support pnpm --filter @agentic-support/db db:migrate:deploy",
     "db:seed": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support pnpm --filter @agentic-support/db db:seed",
     "db:validate": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support pnpm --filter @agentic-support/db db:validate",
+    "load:smoke": "k6 run scripts/load/k6-smoke.js",
+    "maintenance:cleanup": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agentic_support pnpm --filter @agentic-support/db maintenance:cleanup",
     "lint": "pnpm --filter @agentic-support/db build && pnpm --filter @agentic-support/observability build && turbo lint",
     "typecheck": "pnpm --filter @agentic-support/db build && pnpm --filter @agentic-support/observability build && turbo typecheck",
-    "test": "turbo test",
+    "test": "turbo test && node --test scripts/lib/postgres-tools.test.mjs",
     "ci": "pnpm db:generate && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "ci:security": "pnpm audit --audit-level high",
     "ci:docker": "docker build -f apps/api/Dockerfile -t autonomous-csa-api:ci . && docker build -f apps/worker/Dockerfile -t autonomous-csa-worker:ci . && docker build -f apps/web/Dockerfile -t autonomous-csa-web:ci ."
@@ -24,6 +30,10 @@
   "pnpm": {
     "overrides": {
       "@nestjs/core": "^11.1.18",
+      "@babel/core": "^7.29.6",
+      "ajv@<6.14.0": "6.14.0",
+      "ajv@>=7.0.0-alpha.0 <8.18.0": "8.18.0",
+      "brace-expansion@<1.1.13": "1.1.13",
       "fast-uri": "^3.1.2",
       "file-type": "^21.3.2",
       "form-data": "^4.0.6",
@@ -40,6 +50,7 @@
       "postcss": "^8.5.15",
       "qs": "^6.15.2",
       "serialize-javascript": "^7.0.3",
+      "js-yaml@<=4.1.1": "4.2.0",
       "uuid": "^11.1.1"
     }
   }

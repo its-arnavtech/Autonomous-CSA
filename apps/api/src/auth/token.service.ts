@@ -1,4 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from 'crypto';
+import { loadApiRuntimeConfig } from '@agentic-support/observability';
 import { Injectable } from '@nestjs/common';
 
 type AccessTokenPayload = {
@@ -63,48 +64,14 @@ function parseDurationToSeconds(rawValue: string, fallbackValue: string) {
   return amount * multipliers[unit];
 }
 
-function validateSecret(
-  name: 'JWT_ACCESS_SECRET' | 'JWT_REFRESH_SECRET',
-  value: string | undefined,
-) {
-  const nodeEnv = process.env.NODE_ENV ?? 'development';
-  const isProdLike = nodeEnv === 'production';
-  const fallback = `dev-only-${name.toLowerCase()}-change-me-before-production-123456789`;
-
-  if (!value) {
-    if (isProdLike) {
-      throw new Error(`${name} is required in production`);
-    }
-
-    return fallback;
-  }
-
-  if (isProdLike && value.length < 32) {
-    throw new Error(`${name} must be at least 32 characters in production`);
-  }
-
-  return value;
-}
-
 @Injectable()
 export class TokenService {
+  private readonly runtimeConfig = loadApiRuntimeConfig();
   private readonly config: AuthTokenConfig = {
-    accessSecret: validateSecret(
-      'JWT_ACCESS_SECRET',
-      process.env.JWT_ACCESS_SECRET,
-    ),
-    refreshSecret: validateSecret(
-      'JWT_REFRESH_SECRET',
-      process.env.JWT_REFRESH_SECRET,
-    ),
-    accessTtlSeconds: parseDurationToSeconds(
-      process.env.JWT_ACCESS_TTL ?? '',
-      '15m',
-    ),
-    refreshTtlSeconds: parseDurationToSeconds(
-      process.env.JWT_REFRESH_TTL ?? '',
-      '7d',
-    ),
+    accessSecret: this.runtimeConfig.auth.accessSecret,
+    refreshSecret: this.runtimeConfig.auth.refreshSecret,
+    accessTtlSeconds: this.runtimeConfig.auth.accessTtlSeconds,
+    refreshTtlSeconds: this.runtimeConfig.auth.refreshTtlSeconds,
   };
 
   createAccessToken(user: { id: string; email: string }) {

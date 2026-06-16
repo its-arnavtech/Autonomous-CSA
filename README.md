@@ -43,3 +43,27 @@ See:
 ## CI/CD
 
 GitHub Actions now cover quality checks, Prisma migration validation, security scanning, Docker build readiness, CodeQL, and Dependabot hygiene. See [docs/CI_CD.md](/C:/Autonomous-CSA/docs/CI_CD.md) for the workflow breakdown, local equivalent commands, and failure handling guidance.
+
+## Phase 10 Hardening
+
+Local Docker infrastructure now uses PostgreSQL 18 for the `postgres` service. PostgreSQL 18 stores data under a version-specific `PGDATA` path (`/var/lib/postgresql/18/docker`) and the Compose volume is mounted at `/var/lib/postgresql` through the new `postgres-data-v18` volume. The previous PostgreSQL 16 volume is intentionally retained as a temporary rollback source until migration sign-off and the agreed retention window have both completed.
+
+Operational hardening commands:
+
+- `pnpm db:migrate:check`
+- `pnpm db:backup`
+- `pnpm db:restore <backup-file> --target-database-url=...`
+- `pnpm db:backup:verify <backup-file>`
+- `pnpm load:smoke`
+- `pnpm maintenance:cleanup`
+- `./scripts/staging-readiness.sh`
+
+Supporting docs:
+
+- [docs/SECURITY_DEPENDENCIES.md](/C:/Autonomous-CSA/docs/SECURITY_DEPENDENCIES.md)
+- [docs/BACKUP_RESTORE.md](/C:/Autonomous-CSA/docs/BACKUP_RESTORE.md)
+- [docs/LOAD_TESTING.md](/C:/Autonomous-CSA/docs/LOAD_TESTING.md)
+- [docs/MIGRATIONS.md](/C:/Autonomous-CSA/docs/MIGRATIONS.md)
+- [docs/SECRETS.md](/C:/Autonomous-CSA/docs/SECRETS.md)
+- [docs/STAGING_READINESS.md](/C:/Autonomous-CSA/docs/STAGING_READINESS.md)
+- [docs/FAILURE_INJECTION.md](/C:/Autonomous-CSA/docs/FAILURE_INJECTION.md)

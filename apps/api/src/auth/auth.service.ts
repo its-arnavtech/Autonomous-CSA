@@ -1,8 +1,6 @@
 import { randomUUID } from 'crypto';
 import {
   ConflictException,
-  HttpException,
-  HttpStatus,
   Inject,
   Injectable,
   Optional,
@@ -11,6 +9,7 @@ import {
 import { Prisma } from '@agentic-support/db';
 import { MetricsService } from '../observability/metrics.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RateLimitService } from '../rate-limit/rate-limit.service';
 import { PasswordService } from './password.service';
 import { OrganizationRole } from './organization-role.constants';
 import { TokenService } from './token.service';
@@ -58,15 +57,18 @@ const noopMetrics = {
 
 @Injectable()
 export class AuthService {
-  private readonly loginAttempts = new Map<
-    string,
-    { count: number; firstFailureAt: number; blockedUntil?: number }
-  >();
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly passwordService: PasswordService,
     private readonly tokenService: TokenService,
+    @Optional()
+    @Inject(RateLimitService)
+    private readonly rateLimitService: Pick<
+      RateLimitService,
+      'assertLoginAllowed'
+    > = {
+      assertLoginAllowed: () => Promise.resolve(),
+    },
     @Optional()
     @Inject(MetricsService)
     private readonly metrics: MetricsService = noopMetrics as unknown as MetricsService,
@@ -170,7 +172,10 @@ export class AuthService {
 
   async login(dto: LoginDto, metadata: RequestMetadata) {
     const normalizedEmail = this.normalizeEmail(dto.email);
-    this.assertLoginNotRateLimited(normalizedEmail, metadata.ipAddress);
+    await this.rateLimitService.assertLoginAllowed(
+      normalizedEmail,
+      metadata.ipAddress,
+    );
 
     const user = await this.prisma.user.findUnique({
       where: { normalizedEmail },
@@ -183,7 +188,6 @@ export class AuthService {
     });
 
     if (!user || !user.isActive) {
-      this.recordFailedLogin(normalizedEmail, metadata.ipAddress);
       this.metrics.incrementAuthFailure('login', 'auth_error');
       throw new UnauthorizedException('Invalid email or password');
     }
@@ -194,12 +198,9 @@ export class AuthService {
     );
 
     if (!passwordMatches) {
-      this.recordFailedLogin(normalizedEmail, metadata.ipAddress);
       this.metrics.incrementAuthFailure('login', 'auth_error');
       throw new UnauthorizedException('Invalid email or password');
     }
-
-    this.clearFailedLogin(normalizedEmail, metadata.ipAddress);
 
     const sessionId = randomUUID();
     const refreshToken = this.tokenService.createRefreshToken(user.id, sessionId);
@@ -282,13 +283,24 @@ export class AuthService {
     });
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.refreshSession.update({
-        where: { id: existingSession.id },
+      const revokeResult = await tx.refreshSession.updateMany({
+        where: {
+          id: existingSession.id,
+          revokedAt: null,
+          tokenHash: expectedHash,
+          expiresAt: {
+            gt: new Date(),
+          },
+        },
         data: {
           revokedAt: new Date(),
           lastUsedAt: new Date(),
         },
       });
+
+      if (revokeResult.count !== 1) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
 
       await tx.refreshSession.create({
         data: {
@@ -431,46 +443,5 @@ export class AuthService {
     }
 
     return slug;
-  }
-
-  private buildAttemptKey(email: string, ipAddress?: string | null) {
-    return `${ipAddress ?? 'unknown'}:${email}`;
-  }
-
-  private assertLoginNotRateLimited(email: string, ipAddress?: string | null) {
-    const key = this.buildAttemptKey(email, ipAddress);
-    const existing = this.loginAttempts.get(key);
-    if (existing?.blockedUntil && existing.blockedUntil > Date.now()) {
-      this.metrics.incrementAuthFailure('login', 'rate_limited');
-      throw new HttpException(
-        'Too many login attempts. Please try again later.',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-  }
-
-  private recordFailedLogin(email: string, ipAddress?: string | null) {
-    const key = this.buildAttemptKey(email, ipAddress);
-    const now = Date.now();
-    const existing = this.loginAttempts.get(key);
-
-    if (!existing || now - existing.firstFailureAt > 15 * 60_000) {
-      this.loginAttempts.set(key, {
-        count: 1,
-        firstFailureAt: now,
-      });
-      return;
-    }
-
-    const count = existing.count + 1;
-    this.loginAttempts.set(key, {
-      count,
-      firstFailureAt: existing.firstFailureAt,
-      blockedUntil: count >= 5 ? now + 15 * 60_000 : undefined,
-    });
-  }
-
-  private clearFailedLogin(email: string, ipAddress?: string | null) {
-    this.loginAttempts.delete(this.buildAttemptKey(email, ipAddress));
   }
 }

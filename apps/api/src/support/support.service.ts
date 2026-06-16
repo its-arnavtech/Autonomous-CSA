@@ -438,6 +438,27 @@ export class SupportService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      const updatedDraft = await tx.outboundDraft.updateMany({
+        where: {
+          id: draftId,
+          orgId,
+          status: {
+            not: DraftStatus.SENT,
+          },
+        },
+        data: {
+          status: DraftStatus.SENT,
+          sentAt: new Date(),
+          sentBy: this.toUserActor(actorUserId),
+          sentByType: ActorType.USER,
+          sentByUserId: actorUserId,
+        },
+      });
+
+      if (updatedDraft.count !== 1) {
+        throw new BadRequestException('Draft already sent');
+      }
+
       const message = await tx.ticketMessage.create({
         data: {
           orgId,
@@ -448,15 +469,8 @@ export class SupportService {
         },
       });
 
-      const updatedDraft = await tx.outboundDraft.update({
+      const sentDraft = await tx.outboundDraft.findUniqueOrThrow({
         where: { id: draftId },
-        data: {
-          status: DraftStatus.SENT,
-          sentAt: new Date(),
-          sentBy: this.toUserActor(actorUserId),
-          sentByType: ActorType.USER,
-          sentByUserId: actorUserId,
-        },
       });
 
       await tx.ticket.update({
@@ -488,7 +502,7 @@ export class SupportService {
 
       this.metrics.incrementDraftSent('user');
 
-      return { draft: updatedDraft, message };
+      return { draft: sentDraft, message };
     });
   }
 

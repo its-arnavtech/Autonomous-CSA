@@ -65,7 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:18-alpine
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -104,6 +104,9 @@ jobs:
       - name: Validate Prisma schema
         run: pnpm db:validate
 
+      - name: Check migration safety
+        run: pnpm db:migrate:check
+
   security:
     runs-on: ubuntu-latest
     permissions:
@@ -130,6 +133,17 @@ jobs:
 
       - name: Audit dependencies
         run: pnpm audit --audit-level high
+
+      - name: Validate shell script syntax
+        run: bash -n scripts/db-backup.sh scripts/db-restore.sh scripts/db-backup-verify.sh scripts/staging-readiness.sh
+
+      - name: Validate PowerShell script syntax
+        shell: pwsh
+        run: |
+          $null = [System.Management.Automation.Language.Parser]::ParseFile('scripts/db-backup.ps1', [ref]$null, [ref]$null)
+          $null = [System.Management.Automation.Language.Parser]::ParseFile('scripts/db-restore.ps1', [ref]$null, [ref]$null)
+          $null = [System.Management.Automation.Language.Parser]::ParseFile('scripts/db-backup-verify.ps1', [ref]$null, [ref]$null)
+          $null = [System.Management.Automation.Language.Parser]::ParseFile('scripts/staging-readiness.ps1', [ref]$null, [ref]$null)
 
       - name: Scan for secrets
         uses: gitleaks/gitleaks-action@v3

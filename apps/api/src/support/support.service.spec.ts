@@ -258,7 +258,8 @@ describe('SupportService', () => {
           .mockResolvedValue({ id: 'msg_1', body: 'Reply body' }),
       },
       outboundDraft: {
-        update: jest
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: jest
           .fn()
           .mockResolvedValue({ id: 'draft_1', status: DraftStatus.SENT }),
       },
@@ -305,6 +306,46 @@ describe('SupportService', () => {
       },
     });
     expect(result.message.id).toBe('msg_1');
+  });
+
+  it('does not duplicate outbound effects when another sender wins the race', async () => {
+    const { prisma, service } = createService();
+    const tx = {
+      ticketMessage: {
+        create: jest.fn(),
+      },
+      outboundDraft: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findUniqueOrThrow: jest.fn(),
+      },
+      ticket: { update: jest.fn() },
+      agentEvent: {
+        aggregate: jest.fn(),
+        create: jest.fn(),
+      },
+    };
+
+    prisma.outboundDraft.findFirst.mockResolvedValue({
+      id: 'draft_1',
+      orgId: 'org_1',
+      ticketId: 'ticket_1',
+      agentRunId: 'run_1',
+      body: 'Reply body',
+      status: DraftStatus.APPROVED,
+      approvals: [],
+    });
+    prisma.organizationSettings.upsert.mockResolvedValue({
+      orgId: 'org_1',
+      requireHumanApproval: true,
+    });
+    prisma.$transaction.mockImplementation(
+      async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+    );
+
+    await expect(
+      service.sendDraft('draft_1', 'org_1', 'user_1'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(tx.ticketMessage.create).not.toHaveBeenCalled();
   });
 
   it('rejects sending an unapproved draft when human approval is required', async () => {
