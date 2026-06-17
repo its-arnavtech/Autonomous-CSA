@@ -83,18 +83,18 @@ export function TicketControls({
   };
 
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 className="text-lg font-semibold text-slate-900">Ticket Controls</h2>
+    <div className="rounded-3xl border border-white/10 bg-ink-850/70 p-5 shadow-sm">
+      <h2 className="text-lg font-semibold text-mist-50">Ticket Controls</h2>
 
       <div className="mt-4 space-y-5">
         <div className="space-y-2">
-          <label className="block text-sm font-medium text-slate-700" htmlFor="ticket-status">
+          <label className="block text-sm font-medium text-mist-200" htmlFor="ticket-status">
             Status
           </label>
           <div className="flex flex-col gap-3 sm:flex-row">
             <select
               id="ticket-status"
-              className="rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              className="rounded-2xl border border-white/15 px-3 py-2 text-sm text-mist-50"
               value={selectedStatus}
               onChange={(event) => setSelectedStatus(event.target.value as typeof selectedStatus)}
               disabled={isStatusPending}
@@ -109,23 +109,23 @@ export function TicketControls({
               type="button"
               onClick={updateStatus}
               disabled={isStatusPending || selectedStatus === status}
-              className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="rounded-2xl bg-iris-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-iris-600/40 disabled:text-white/50"
             >
               {isStatusPending ? 'Updating...' : 'Update Status'}
             </button>
           </div>
-          {statusSuccess ? <p className="text-sm text-emerald-700">{statusSuccess}</p> : null}
-          {statusError ? <p className="text-sm text-rose-700">{statusError}</p> : null}
+          {statusSuccess ? <p className="text-sm text-emerald-300">{statusSuccess}</p> : null}
+          {statusError ? <p className="text-sm text-rose-300">{statusError}</p> : null}
         </div>
 
         <div className="space-y-2">
-          <label className="block text-sm font-medium text-slate-700" htmlFor="ticket-priority">
+          <label className="block text-sm font-medium text-mist-200" htmlFor="ticket-priority">
             Priority
           </label>
           <div className="flex flex-col gap-3 sm:flex-row">
             <select
               id="ticket-priority"
-              className="rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              className="rounded-2xl border border-white/15 px-3 py-2 text-sm text-mist-50"
               value={selectedPriority}
               onChange={(event) =>
                 setSelectedPriority(event.target.value as typeof selectedPriority)
@@ -142,15 +142,15 @@ export function TicketControls({
               type="button"
               onClick={updatePriority}
               disabled={isPriorityPending || selectedPriority === priority}
-              className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="rounded-2xl bg-iris-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-iris-600/40 disabled:text-white/50"
             >
               {isPriorityPending ? 'Updating...' : 'Update Priority'}
             </button>
           </div>
           {prioritySuccess ? (
-            <p className="text-sm text-emerald-700">{prioritySuccess}</p>
+            <p className="text-sm text-emerald-300">{prioritySuccess}</p>
           ) : null}
-          {priorityError ? <p className="text-sm text-rose-700">{priorityError}</p> : null}
+          {priorityError ? <p className="text-sm text-rose-300">{priorityError}</p> : null}
         </div>
       </div>
     </div>

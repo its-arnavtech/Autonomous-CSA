@@ -92,14 +92,14 @@ export function RegisterForm() {
         />
       </div>
 
-      {error ? <p className="text-sm text-rose-700">{error}</p> : null}
+      {error ? (
+        <p className="rounded-lg border border-rose-glow/30 bg-rose-glow/10 px-3 py-2 text-sm text-rose-glow">
+          {error}
+        </p>
+      ) : null}
 
-      <button
-        type="submit"
-        disabled={isPending}
-        className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white"
-      >
-        {isPending ? 'Creating account...' : 'Create Account'}
+      <button type="submit" disabled={isPending} className="btn btn-primary w-full">
+        {isPending ? 'Creating account…' : 'Create account'}
       </button>
     </form>
   );
@@ -115,8 +115,8 @@ function Field(props: {
   required?: boolean;
 }) {
   return (
-    <div className="space-y-2">
-      <label className="text-sm font-medium text-slate-700" htmlFor={props.id}>
+    <div>
+      <label className="field-label" htmlFor={props.id}>
         {props.label}
       </label>
       <input
@@ -124,10 +124,10 @@ function Field(props: {
         type={props.type ?? 'text'}
         value={props.value}
         onChange={(event) => props.onChange(event.target.value)}
-        className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
+        className="field-input"
         required={props.required}
       />
-      {props.hint ? <p className="text-xs text-slate-500">{props.hint}</p> : null}
+      {props.hint ? <p className="mt-1.5 text-xs text-mist-500">{props.hint}</p> : null}
     </div>
   );
 }

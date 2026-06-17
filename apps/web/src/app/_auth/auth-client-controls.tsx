@@ -54,27 +54,28 @@ export function AuthClientControls({
   };
 
   return (
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-wrap items-center gap-2.5">
       {showOrganizationPicker ? (
         <>
           {memberships.length > 1 ? (
             <select
               value={organizationId}
               onChange={(event) => setOrganizationId(event.target.value)}
-              className="rounded-full border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+              className="field-input max-w-[14rem] !py-2 text-sm"
               disabled={isPending}
             >
               {memberships.map((membership) => (
                 <option
                   key={membership.organizationId}
                   value={membership.organizationId}
+                  className="bg-ink-850 text-mist-50"
                 >
                   {membership.organizationName} ({membership.role})
                 </option>
               ))}
             </select>
           ) : (
-            <div className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
+            <div className="badge badge-neutral !text-[0.72rem] !normal-case">
               {memberships[0]?.organizationName}
             </div>
           )}
@@ -82,9 +83,9 @@ export function AuthClientControls({
             type="button"
             onClick={onSelectOrganization}
             disabled={isPending}
-            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700"
+            className="btn btn-ghost"
           >
-            {activeOrganizationId ? 'Switch Org' : 'Use Organization'}
+            {activeOrganizationId ? 'Switch org' : 'Use organization'}
           </button>
         </>
       ) : null}
@@ -93,12 +94,16 @@ export function AuthClientControls({
         type="button"
         onClick={onLogout}
         disabled={isPending}
-        className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+        className="btn btn-ghost"
       >
-        Logout
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <path d="M16 17l5-5-5-5M21 12H9" />
+        </svg>
+        Sign out
       </button>
 
-      {error ? <span className="text-sm text-rose-700">{error}</span> : null}
+      {error ? <span className="text-sm text-rose-glow">{error}</span> : null}
     </div>
   );
 }

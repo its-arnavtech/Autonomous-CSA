@@ -53,11 +53,11 @@ export default async function KnowledgePage({ searchParams }: KnowledgePageProps
     const detail = await response.text();
     content = (
       <main className="mx-auto max-w-5xl space-y-4 px-6 py-8">
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5">
-          <h2 className="text-2xl font-semibold text-rose-800">
+        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/15 p-5">
+          <h2 className="text-2xl font-semibold text-rose-200">
             Failed to load knowledge articles
           </h2>
-          <pre className="mt-3 overflow-auto rounded-xl bg-white/80 p-3 text-xs text-slate-800">
+          <pre className="mt-3 overflow-auto rounded-xl bg-ink-850/80 p-3 text-xs text-mist-100">
             {detail}
           </pre>
         </div>
@@ -68,10 +68,10 @@ export default async function KnowledgePage({ searchParams }: KnowledgePageProps
     content = (
       <main className="mx-auto max-w-5xl space-y-6 px-6 py-8">
         <div>
-          <h2 className="text-3xl font-semibold tracking-tight text-slate-900">
+          <h2 className="text-3xl font-semibold tracking-tight text-mist-50">
             Knowledge Base
           </h2>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-mist-400">
             Manage deterministic internal support articles for{' '}
             {context.activeMembership.organizationName}.
           </p>

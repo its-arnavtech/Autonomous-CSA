@@ -164,25 +164,25 @@ function badgeTone(kind: 'status' | 'priority', value: string) {
     switch (value) {
       case 'RESOLVED':
       case 'CLOSED':
-        return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+        return 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30';
       case 'WAITING_CUSTOMER':
-        return 'bg-amber-50 text-amber-700 ring-amber-200';
+        return 'bg-amber-500/15 text-amber-300 ring-amber-500/30';
       case 'PENDING':
-        return 'bg-sky-50 text-sky-700 ring-sky-200';
+        return 'bg-sky-500/15 text-sky-300 ring-sky-500/30';
       default:
-        return 'bg-slate-100 text-slate-700 ring-slate-200';
+        return 'bg-white/[0.06] text-mist-200 ring-white/10';
     }
   }
 
   switch (value) {
     case 'URGENT':
-      return 'bg-rose-50 text-rose-700 ring-rose-200';
+      return 'bg-rose-500/15 text-rose-300 ring-rose-500/30';
     case 'HIGH':
-      return 'bg-orange-50 text-orange-700 ring-orange-200';
+      return 'bg-orange-500/15 text-orange-300 ring-orange-500/30';
     case 'NORMAL':
-      return 'bg-blue-50 text-blue-700 ring-blue-200';
+      return 'bg-blue-500/15 text-blue-300 ring-blue-500/30';
     default:
-      return 'bg-zinc-100 text-zinc-700 ring-zinc-200';
+      return 'bg-zinc-500/20 text-zinc-300 ring-zinc-500/30';
   }
 }
 
@@ -198,16 +198,16 @@ function ErrorPanel({
   return (
     <main className="mx-auto max-w-6xl space-y-4 px-6 py-8">
       <div>
-        <p className="text-sm text-slate-500">Org: {organizationLabel}</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">
+        <p className="text-sm text-mist-400">Org: {organizationLabel}</p>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-mist-50">
           Ticket Detail
         </h1>
-        <p className="mt-2 break-all text-sm text-slate-500">{ticketId}</p>
+        <p className="mt-2 break-all text-sm text-mist-400">{ticketId}</p>
       </div>
 
-      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5">
-        <h2 className="text-lg font-semibold text-rose-800">Failed to load ticket data</h2>
-        <pre className="mt-3 overflow-auto rounded-xl bg-white/80 p-3 text-xs text-slate-800">
+      <div className="rounded-2xl border border-rose-500/30 bg-rose-500/15 p-5">
+        <h2 className="text-lg font-semibold text-rose-200">Failed to load ticket data</h2>
+        <pre className="mt-3 overflow-auto rounded-xl bg-ink-850/80 p-3 text-xs text-mist-100">
           {details}
         </pre>
       </div>
@@ -327,6 +327,17 @@ export default async function TicketPage({ params }: TicketPageProps) {
     );
   }
 
+  // Some endpoints (e.g. conversation for a ticket with no channel thread)
+  // legitimately return a 200 with an empty body. Parse defensively so an
+  // empty response falls back to a sensible default instead of throwing.
+  const readJson = async <T,>(res: Response, fallback: T): Promise<T> => {
+    const body = await res.text();
+    if (!body) {
+      return fallback;
+    }
+    return JSON.parse(body) as T;
+  };
+
   const [
     ticket,
     timeline,
@@ -336,26 +347,16 @@ export default async function TicketPage({ params }: TicketPageProps) {
     conversation,
     channelMessages,
     outboundMessages,
-  ] =
-    (await Promise.all([
-      detailRes.json(),
-      timelineRes.json(),
-      approvalsRes.json(),
-      retrievalsRes.json(),
-      guardrailsRes.json(),
-      conversationRes.json(),
-      channelMessagesRes.json(),
-      outboundMessagesRes.json(),
-    ])) as [
-      TicketDetail,
-      TimelineEvent[],
-      Approval[],
-      Retrieval[],
-      GuardrailCheck[],
-      ChannelConversation,
-      ChannelMessage[],
-      OutboundMessage[],
-    ];
+  ] = await Promise.all([
+    readJson<TicketDetail>(detailRes, null as unknown as TicketDetail),
+    readJson<TimelineEvent[]>(timelineRes, []),
+    readJson<Approval[]>(approvalsRes, []),
+    readJson<Retrieval[]>(retrievalsRes, []),
+    readJson<GuardrailCheck[]>(guardrailsRes, []),
+    readJson<ChannelConversation | null>(conversationRes, null),
+    readJson<ChannelMessage[]>(channelMessagesRes, []),
+    readJson<OutboundMessage[]>(outboundMessagesRes, []),
+  ]);
 
   const content = (
     <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
@@ -364,31 +365,31 @@ export default async function TicketPage({ params }: TicketPageProps) {
           <div className="flex flex-wrap items-center gap-4">
             <Link
               href="/tickets"
-              className="text-sm font-medium text-slate-500 underline underline-offset-4"
+              className="text-sm font-medium text-mist-400 underline underline-offset-4"
             >
               Back to inbox
             </Link>
             <Link
               href="/settings"
-              className="text-sm font-medium text-slate-500 underline underline-offset-4"
+              className="text-sm font-medium text-mist-400 underline underline-offset-4"
             >
               Settings
             </Link>
             <Link
               href="/knowledge"
-              className="text-sm font-medium text-slate-500 underline underline-offset-4"
+              className="text-sm font-medium text-mist-400 underline underline-offset-4"
             >
               Knowledge
             </Link>
           </div>
           <div>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-mist-400">
               Org: {context.activeMembership.organizationName}
             </p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">
+            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-mist-50">
               {ticket.subject}
             </h1>
-            <p className="mt-2 break-all text-sm text-slate-500">
+            <p className="mt-2 break-all text-sm text-mist-400">
               {ticket.customerName ?? ticket.customerEmail}
             </p>
           </div>
@@ -410,23 +411,23 @@ export default async function TicketPage({ params }: TicketPageProps) {
 
       <section className="grid gap-4 lg:grid-cols-[1.8fr_1fr]">
         <div className="space-y-4">
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">Customer Conversation</h2>
+          <div className="rounded-3xl border border-white/10 bg-ink-850/70 p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-mist-50">Customer Conversation</h2>
             <div className="mt-4 space-y-3">
               {ticket.messages.length === 0 ? (
-                <p className="text-sm text-slate-500">No messages yet.</p>
+                <p className="text-sm text-mist-400">No messages yet.</p>
               ) : (
                 ticket.messages.map((message) => (
-                  <article key={message.id} className="rounded-2xl border border-slate-200 p-4">
+                  <article key={message.id} className="rounded-2xl border border-white/10 p-4">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                      <span className="text-sm font-medium text-slate-800">
+                      <span className="text-sm font-medium text-mist-100">
                         {message.direction === 'INBOUND' ? 'Customer' : 'Support'}
                       </span>
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-mist-500">
                         {message.status} · {new Date(message.createdAt).toLocaleString()}
                       </span>
                     </div>
-                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-mist-200">
                       {message.body}
                     </p>
                   </article>
@@ -436,21 +437,21 @@ export default async function TicketPage({ params }: TicketPageProps) {
           </div>
 
           {conversation ? (
-            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="text-lg font-semibold text-slate-900">
+            <div className="rounded-lg border border-white/10 bg-ink-850/70 p-5 shadow-sm">
+              <h2 className="text-lg font-semibold text-mist-50">
                 Channel Context
               </h2>
-              <dl className="mt-4 grid gap-3 text-sm text-slate-600 md:grid-cols-2">
+              <dl className="mt-4 grid gap-3 text-sm text-mist-300 md:grid-cols-2">
                 <div>
-                  <dt className="font-medium text-slate-900">Provider</dt>
+                  <dt className="font-medium text-mist-50">Provider</dt>
                   <dd>{conversation.channel.provider}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-slate-900">Connection</dt>
+                  <dt className="font-medium text-mist-50">Connection</dt>
                   <dd>{conversation.channel.displayName}</dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-slate-900">Customer</dt>
+                  <dt className="font-medium text-mist-50">Customer</dt>
                   <dd>
                     {conversation.customer?.displayName ??
                       conversation.customer?.email ??
@@ -458,7 +459,7 @@ export default async function TicketPage({ params }: TicketPageProps) {
                   </dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-slate-900">Thread</dt>
+                  <dt className="font-medium text-mist-50">Thread</dt>
                   <dd className="break-all">
                     {conversation.externalThreadId ?? 'n/a'}
                   </dd>
@@ -467,33 +468,33 @@ export default async function TicketPage({ params }: TicketPageProps) {
             </div>
           ) : null}
 
-          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">
+          <div className="rounded-lg border border-white/10 bg-ink-850/70 p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-mist-50">
               Channel Messages
             </h2>
             <div className="mt-4 space-y-3">
               {channelMessages.length === 0 ? (
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-mist-400">
                   No external channel messages are linked to this ticket.
                 </p>
               ) : (
                 channelMessages.map((message) => (
                   <article
                     key={message.id}
-                    className="rounded-lg border border-slate-200 p-4"
+                    className="rounded-lg border border-white/10 p-4"
                   >
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                      <span className="text-sm font-medium text-slate-800">
+                      <span className="text-sm font-medium text-mist-100">
                         {message.direction}
                       </span>
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-mist-500">
                         {new Date(message.createdAt).toLocaleString()}
                       </span>
                     </div>
-                    <div className="mt-2 break-all text-xs text-slate-400">
+                    <div className="mt-2 break-all text-xs text-mist-500">
                       Provider message: {message.providerMessageId ?? 'n/a'}
                     </div>
-                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-mist-200">
                       {message.textBody ?? message.sanitizedHtmlBody ?? '(empty message)'}
                     </p>
                     {message.attachments.length > 0 ? (
@@ -501,9 +502,9 @@ export default async function TicketPage({ params }: TicketPageProps) {
                         {message.attachments.map((attachment) => (
                           <div
                             key={attachment.id}
-                            className="rounded-md bg-slate-50 p-3 text-xs text-slate-600"
+                            className="rounded-md bg-white/[0.03] p-3 text-xs text-mist-300"
                           >
-                            <div className="font-medium text-slate-900">
+                            <div className="font-medium text-mist-50">
                               {attachment.filename}
                             </div>
                             <div>
@@ -521,34 +522,34 @@ export default async function TicketPage({ params }: TicketPageProps) {
             </div>
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">
+          <div className="rounded-lg border border-white/10 bg-ink-850/70 p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-mist-50">
               Outbound Delivery
             </h2>
             <div className="mt-4 space-y-3">
               {outboundMessages.length === 0 ? (
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-mist-400">
                   No outbound channel messages are queued for this ticket.
                 </p>
               ) : (
                 outboundMessages.map((message) => (
                   <article
                     key={message.id}
-                    className="rounded-lg border border-slate-200 p-4"
+                    className="rounded-lg border border-white/10 p-4"
                   >
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                      <span className="text-sm font-medium text-slate-800">
+                      <span className="text-sm font-medium text-mist-100">
                         {message.status}
                       </span>
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-mist-500">
                         Attempts {message.attemptCount}/{message.maxAttempts}
                       </span>
                     </div>
-                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-mist-200">
                       {message.textBody}
                     </p>
                     {message.lastErrorCode ? (
-                      <div className="mt-3 rounded-md bg-rose-50 p-3 text-xs text-rose-700">
+                      <div className="mt-3 rounded-md bg-rose-500/15 p-3 text-xs text-rose-300">
                         {message.lastErrorCode}: {message.lastErrorRedacted}
                       </div>
                     ) : null}
@@ -557,7 +558,7 @@ export default async function TicketPage({ params }: TicketPageProps) {
                         {message.deliveryAttempts.map((attempt) => (
                           <div
                             key={attempt.id}
-                            className="rounded-md bg-slate-50 p-3 text-xs text-slate-600"
+                            className="rounded-md bg-white/[0.03] p-3 text-xs text-mist-300"
                           >
                             Attempt {attempt.attemptNumber}: {attempt.outcome}
                             {attempt.errorRedacted ? ` - ${attempt.errorRedacted}` : ''}
@@ -571,20 +572,20 @@ export default async function TicketPage({ params }: TicketPageProps) {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">Agent Timeline</h2>
+          <div className="rounded-3xl border border-white/10 bg-ink-850/70 p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-mist-50">Agent Timeline</h2>
             <div className="mt-4 space-y-3">
               {timeline.length === 0 ? (
-                <p className="text-sm text-slate-500">No timeline events yet.</p>
+                <p className="text-sm text-mist-400">No timeline events yet.</p>
               ) : (
                 timeline.map((event) => (
-                  <article key={event.id} className="rounded-2xl border border-slate-200 p-4">
+                  <article key={event.id} className="rounded-2xl border border-white/10 p-4">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <div className="font-medium text-slate-900">{event.type}</div>
-                        <div className="text-xs text-slate-400">Sequence {event.sequence}</div>
+                        <div className="font-medium text-mist-50">{event.type}</div>
+                        <div className="text-xs text-mist-500">Sequence {event.sequence}</div>
                       </div>
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-mist-500">
                         {new Date(event.ts).toLocaleString()}
                       </span>
                     </div>
@@ -599,49 +600,49 @@ export default async function TicketPage({ params }: TicketPageProps) {
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">Ticket Metadata</h2>
-            <dl className="mt-4 space-y-3 text-sm text-slate-600">
+          <div className="rounded-3xl border border-white/10 bg-ink-850/70 p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-mist-50">Ticket Metadata</h2>
+            <dl className="mt-4 space-y-3 text-sm text-mist-300">
               <div className="flex items-center justify-between gap-3">
                 <dt>Email</dt>
-                <dd className="break-all text-right text-slate-900">{ticket.customerEmail}</dd>
+                <dd className="break-all text-right text-mist-50">{ticket.customerEmail}</dd>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <dt>Created</dt>
-                <dd className="text-right text-slate-900">
+                <dd className="text-right text-mist-50">
                   {new Date(ticket.createdAt).toLocaleString()}
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <dt>Updated</dt>
-                <dd className="text-right text-slate-900">
+                <dd className="text-right text-mist-50">
                   {new Date(ticket.updatedAt).toLocaleString()}
                 </dd>
               </div>
             </dl>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">Latest Agent Run</h2>
+          <div className="rounded-3xl border border-white/10 bg-ink-850/70 p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-mist-50">Latest Agent Run</h2>
             {!ticket.latestAgentRun ? (
-              <p className="mt-4 text-sm text-slate-500">No agent run recorded yet.</p>
+              <p className="mt-4 text-sm text-mist-400">No agent run recorded yet.</p>
             ) : (
-              <dl className="mt-4 space-y-3 text-sm text-slate-600">
+              <dl className="mt-4 space-y-3 text-sm text-mist-300">
                 <div className="flex items-center justify-between gap-3">
                   <dt>Status</dt>
-                  <dd className="text-right font-medium text-slate-900">
+                  <dd className="text-right font-medium text-mist-50">
                     {ticket.latestAgentRun.status}
                   </dd>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <dt>Trigger</dt>
-                  <dd className="text-right text-slate-900">
+                  <dd className="text-right text-mist-50">
                     {ticket.latestAgentRun.trigger}
                   </dd>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <dt>Started</dt>
-                  <dd className="text-right text-slate-900">
+                  <dd className="text-right text-mist-50">
                     {ticket.latestAgentRun.startedAt
                       ? new Date(ticket.latestAgentRun.startedAt).toLocaleString()
                       : 'Not started'}
@@ -649,7 +650,7 @@ export default async function TicketPage({ params }: TicketPageProps) {
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <dt>Finished</dt>
-                  <dd className="text-right text-slate-900">
+                  <dd className="text-right text-mist-50">
                     {ticket.latestAgentRun.finishedAt
                       ? new Date(ticket.latestAgentRun.finishedAt).toLocaleString()
                       : 'In progress'}
@@ -657,12 +658,12 @@ export default async function TicketPage({ params }: TicketPageProps) {
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <dt>Cost</dt>
-                  <dd className="text-right text-slate-900">
+                  <dd className="text-right text-mist-50">
                     ${ (ticket.latestAgentRun.totalCostCents / 100).toFixed(2) }
                   </dd>
                 </div>
                 {ticket.latestAgentRun.errorMessage ? (
-                  <div className="rounded-2xl bg-rose-50 p-3 text-rose-700">
+                  <div className="rounded-2xl bg-rose-500/15 p-3 text-rose-300">
                     {ticket.latestAgentRun.errorMessage}
                   </div>
                 ) : null}
@@ -679,13 +680,13 @@ export default async function TicketPage({ params }: TicketPageProps) {
 
           <GuardrailsPanel checks={guardrails} />
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-3xl border border-white/10 bg-ink-850/70 p-5 shadow-sm">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-slate-900">Drafts</h2>
+              <h2 className="text-lg font-semibold text-mist-50">Drafts</h2>
             </div>
             <div className="mt-4 space-y-3">
               {ticket.drafts.length === 0 ? (
-                <p className="text-sm text-slate-500">No drafts created yet.</p>
+                <p className="text-sm text-mist-400">No drafts created yet.</p>
               ) : (
                 ticket.drafts.map((draft) => (
                   <DraftCard key={draft.id} draft={draft} />
@@ -697,11 +698,11 @@ export default async function TicketPage({ params }: TicketPageProps) {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">Approvals</h2>
+          <div className="rounded-3xl border border-white/10 bg-ink-850/70 p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-mist-50">Approvals</h2>
             <div className="mt-4 space-y-3">
               {approvals.length === 0 ? (
-                <p className="text-sm text-slate-500">No approvals created yet.</p>
+                <p className="text-sm text-mist-400">No approvals created yet.</p>
               ) : (
                 approvals.map((approval) => (
                   <ApprovalReviewCard key={approval.id} approval={approval} />

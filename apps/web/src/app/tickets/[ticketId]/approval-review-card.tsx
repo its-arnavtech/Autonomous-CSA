@@ -21,11 +21,11 @@ type ApprovalReviewCardProps = {
 function approvalTone(status: string) {
   switch (status) {
     case 'APPROVED':
-      return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+      return 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30';
     case 'REJECTED':
-      return 'bg-rose-50 text-rose-700 ring-rose-200';
+      return 'bg-rose-500/15 text-rose-300 ring-rose-500/30';
     default:
-      return 'bg-amber-50 text-amber-700 ring-amber-200';
+      return 'bg-amber-500/15 text-amber-300 ring-amber-500/30';
   }
 }
 
@@ -64,40 +64,40 @@ export function ApprovalReviewCard({ approval }: ApprovalReviewCardProps) {
   };
 
   return (
-    <article className="rounded-2xl border border-slate-200 p-4">
+    <article className="rounded-2xl border border-white/10 p-4">
       <div className="flex items-center justify-between gap-3">
         <span
           className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${approvalTone(approval.status)}`}
         >
           {approval.status}
         </span>
-        <div className="text-right text-xs text-slate-400">
+        <div className="text-right text-xs text-mist-500">
           <div>Created {new Date(approval.createdAt).toLocaleString()}</div>
           <div>Updated {new Date(approval.updatedAt).toLocaleString()}</div>
         </div>
       </div>
 
       {approval.proposedResponse ? (
-        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-mist-200">
           {approval.proposedResponse}
         </p>
       ) : (
-        <p className="mt-3 text-sm text-slate-500">No proposed response captured.</p>
+        <p className="mt-3 text-sm text-mist-400">No proposed response captured.</p>
       )}
 
       {approval.outboundDraft ? (
-        <p className="mt-2 text-sm text-slate-500">
-          Linked draft status: <span className="font-medium text-slate-700">{approval.outboundDraft.status}</span>
+        <p className="mt-2 text-sm text-mist-400">
+          Linked draft status: <span className="font-medium text-mist-200">{approval.outboundDraft.status}</span>
         </p>
       ) : null}
 
       <div className="mt-3 space-y-2">
-        <label htmlFor={`reviewer-note-${approval.id}`} className="block text-sm font-medium text-slate-700">
+        <label htmlFor={`reviewer-note-${approval.id}`} className="block text-sm font-medium text-mist-200">
           Reviewer Note
         </label>
         <textarea
           id={`reviewer-note-${approval.id}`}
-          className="min-h-24 w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
+          className="min-h-24 w-full rounded-2xl border border-white/15 px-3 py-2 text-sm text-mist-50"
           value={reviewerNote}
           onChange={(event) => setReviewerNote(event.target.value)}
           disabled={isPending || approval.status !== 'PENDING'}
@@ -126,8 +126,8 @@ export function ApprovalReviewCard({ approval }: ApprovalReviewCardProps) {
         </div>
       ) : null}
 
-      {success ? <p className="mt-3 text-sm text-emerald-700">{success}</p> : null}
-      {error ? <p className="mt-3 text-sm text-rose-700">{error}</p> : null}
+      {success ? <p className="mt-3 text-sm text-emerald-300">{success}</p> : null}
+      {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
     </article>
   );
 }

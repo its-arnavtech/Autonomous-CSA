@@ -35,44 +35,46 @@ export function LoginForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-5">
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-slate-700" htmlFor="email">
+      <div>
+        <label className="field-label" htmlFor="email">
           Email
         </label>
         <input
           id="email"
           type="email"
           autoComplete="email"
+          placeholder="you@company.com"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
+          className="field-input"
           required
         />
       </div>
 
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-slate-700" htmlFor="password">
+      <div>
+        <label className="field-label" htmlFor="password">
           Password
         </label>
         <input
           id="password"
           type="password"
           autoComplete="current-password"
+          placeholder="••••••••••••"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
+          className="field-input"
           required
         />
       </div>
 
-      {error ? <p className="text-sm text-rose-700">{error}</p> : null}
+      {error ? (
+        <p className="rounded-lg border border-rose-glow/30 bg-rose-glow/10 px-3 py-2 text-sm text-rose-glow">
+          {error}
+        </p>
+      ) : null}
 
-      <button
-        type="submit"
-        disabled={isPending}
-        className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white"
-      >
-        {isPending ? 'Signing in...' : 'Sign In'}
+      <button type="submit" disabled={isPending} className="btn btn-primary w-full">
+        {isPending ? 'Signing in…' : 'Sign in'}
       </button>
     </form>
   );

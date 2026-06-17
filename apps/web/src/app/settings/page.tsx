@@ -37,11 +37,11 @@ export default async function SettingsPage() {
     const detail = await response.text();
     content = (
       <main className="mx-auto max-w-3xl space-y-4 px-6 py-8">
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5">
-          <h2 className="text-2xl font-semibold text-rose-800">
+        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/15 p-5">
+          <h2 className="text-2xl font-semibold text-rose-200">
             Failed to load settings
           </h2>
-          <pre className="mt-3 overflow-auto rounded-xl bg-white/80 p-3 text-xs text-slate-800">
+          <pre className="mt-3 overflow-auto rounded-xl bg-ink-850/80 p-3 text-xs text-mist-100">
             {detail}
           </pre>
         </div>
@@ -52,10 +52,10 @@ export default async function SettingsPage() {
     content = (
       <main className="mx-auto max-w-3xl space-y-6 px-6 py-8">
         <div>
-          <h2 className="text-3xl font-semibold tracking-tight text-slate-900">
+          <h2 className="text-3xl font-semibold tracking-tight text-mist-50">
             Support Settings
           </h2>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-mist-400">
             Configure the approval and automation defaults for this organization.
           </p>
         </div>
