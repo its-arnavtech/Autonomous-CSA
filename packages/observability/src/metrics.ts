@@ -31,6 +31,18 @@ export const METRIC_NAMES = {
   knowledgeRetrievalsTotal: 'autonomous_knowledge_retrievals_total',
   knowledgeResultsCount: 'autonomous_knowledge_results_count',
   knowledgeUsedTotal: 'autonomous_knowledge_used_total',
+  channelWebhooksTotal: 'autonomous_channel_webhooks_total',
+  channelWebhookSignatureFailuresTotal:
+    'autonomous_channel_webhook_signature_failures_total',
+  channelDuplicateWebhooksTotal:
+    'autonomous_channel_duplicate_webhooks_total',
+  channelInboundMessagesTotal: 'autonomous_channel_inbound_messages_total',
+  channelConversationsCreatedTotal:
+    'autonomous_channel_conversations_created_total',
+  channelTicketsCreatedTotal:
+    'autonomous_channel_tickets_created_total',
+  channelOutboundQueuedTotal:
+    'autonomous_channel_outbound_queued_total',
 } as const;
 
 export const METRIC_OUTCOMES = [

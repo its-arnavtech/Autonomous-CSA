@@ -69,3 +69,28 @@ Validation run from `C:\Autonomous-CSA` during the Phase 8 closeout.
 - Hosted PostgreSQL version was verified as `18.3`. Fly Upstash Redis required billing configuration, so `fly.redis.toml` and `ops/redis/Dockerfile` define the private Redis fallback for future use.
 - No billing method will be attached. Hosted Phase 11B gates are deferred by the zero-spend infrastructure policy, not treated as a technical failure.
 - Active Phase 11A work uses `docker-compose.staging.yml`, `.env.staging.example`, and `pnpm staging:local:*` commands to verify production images, PostgreSQL 18, Redis/BullMQ, migrations, seed, smoke, backup, and restore locally/CI without paid services.
+# Phase 12 Status
+
+Support channel integration foundation has been added on `support-integration`:
+
+- Tenant-scoped channel schema and migration.
+- Mock email provider abstraction.
+- Signed webhook ingestion with receipt idempotency.
+- Raw-byte mock webhook signature verification.
+- Durable `InboundDispatch` recovery for Redis enqueue failures.
+- External customer, conversation, message, attachment metadata, and ticket/run creation.
+- Approval-to-outbound transactional state.
+- Channel delivery worker with attempts, retry scheduling, dead-letter, and replay.
+- Outbound delivery reconciler for pending/retry/stale processing rows after Redis or worker interruptions.
+- Channel management UI and ticket delivery visibility.
+- Organization-level channel audit events.
+
+Verified locally in this workspace:
+
+- Prisma validate/generate/deploy/migrate-check for channel migrations.
+- Focused raw-signature, controller, inbound dispatch, approval, and operations tests.
+- API typecheck and lint after follow-up changes.
+- `pnpm staging:local:verify` against production Docker images, PostgreSQL 18, Redis/BullMQ, migrations, smoke, RBAC regression, and backup/restore.
+- `pnpm channel:staging:verify` on June 17, 2026 with raw webhook security, concurrent duplicate suppression, approval/outbound delivery, callback ordering, retry/permanent failure handling, replay RBAC, Redis/Postgres/API/worker drills, bounded load, and channel backup/restore evidence.
+
+Phase 12 local implementation and production-image mock-channel verification are complete in this workspace. Remaining non-local gates are remote push/CI and any follow-up GitHub issue triage requested after the Phase 12 branch is published.

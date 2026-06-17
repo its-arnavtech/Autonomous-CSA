@@ -35,3 +35,10 @@ Status: production is no-go. Phase 11A local/CI staging verification may be comp
 | Data | Restore drill complete | Hosted pending |
 
 Production review is no-go until Phase 11B hosted staging gates are explicitly re-enabled and pass. The current zero-spend policy does not approve production deployment, paid hosted staging, or an RC tag based only on local verification.
+# Phase 12 Channel Gate
+
+Support channels remain zero-spend and mock-first. Do not enable a real provider until provider-specific signing rules, replay windows, real credential storage, attachment scanning/download design, and provider-specific retry semantics are reviewed.
+
+The Phase 12 mock-channel local gate passed on June 17, 2026 with `pnpm channel:staging:verify` after `pnpm staging:local:verify`. Evidence is in `run-output/channel-staging-results.json` and includes production-image E2E, backup/restore, load/concurrency checks, and Redis/Postgres/API/worker restart drills.
+
+This does not change the overall production no-go above: hosted staging, paid infrastructure, and real-provider rollout remain blocked until explicitly re-enabled and reviewed.

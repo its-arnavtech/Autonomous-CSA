@@ -27,6 +27,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { TenantContextGuard } from '../auth/tenant-context.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { SupportService } from '../support/support.service';
+import { ChannelsService } from '../channels/channels.service';
 import { CreateApprovalDto, UpdateApprovalDto } from './approvals.dto';
 
 @ApiTags('approvals')
@@ -37,6 +38,7 @@ export class ApprovalsController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly supportService: SupportService,
+    private readonly channelsService: ChannelsService,
   ) {}
 
   @Post()
@@ -93,7 +95,8 @@ export class ApprovalsController {
       organization.organizationId,
     );
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
+      let outboundMessageId: string | null = null;
       const transition = await tx.humanApproval.updateMany({
         where: {
           id: approvalId,
@@ -115,7 +118,7 @@ export class ApprovalsController {
       });
 
       if (approval.outboundDraftId) {
-        if (dto.status === 'APPROVED') {
+        if (dto.status === ApprovalStatus.APPROVED) {
           await tx.outboundDraft.update({
             where: { id: approval.outboundDraftId },
             data: {
@@ -142,9 +145,18 @@ export class ApprovalsController {
             },
             approval.agentRunId ?? undefined,
           );
+
+          const outbound =
+            await this.channelsService.createOutboundForApprovedDraft(
+              tx,
+              organization.organizationId,
+              approval.outboundDraftId,
+              user.userId,
+            );
+          outboundMessageId = outbound?.id ?? null;
         }
 
-        if (dto.status === 'REJECTED') {
+        if (dto.status === ApprovalStatus.REJECTED) {
           await tx.outboundDraft.update({
             where: { id: approval.outboundDraftId },
             data: {
@@ -170,7 +182,13 @@ export class ApprovalsController {
         }
       }
 
-      return updatedApproval;
+      return { approval: updatedApproval, outboundMessageId };
     });
+
+    if (result.outboundMessageId) {
+      await this.channelsService.enqueueDelivery(result.outboundMessageId);
+    }
+
+    return result.approval;
   }
 }

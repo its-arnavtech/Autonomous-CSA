@@ -32,6 +32,19 @@ type OperationsSummary = {
     activeRuns: number;
     unresolvedFailures: number;
   };
+  channelDelivery: {
+    pendingOutbound: number;
+    retryingOutbound: number;
+    deadLetterOutbound: number;
+    recentFailures: Array<{
+      id: string;
+      ticketId: string;
+      status: string;
+      lastErrorCode: string | null;
+      lastErrorRedacted: string | null;
+      updatedAt: string;
+    }>;
+  };
 };
 
 type OperationsRun = {
@@ -218,6 +231,27 @@ export default async function OperationsPage({
             </div>
             <div className="mt-2 text-xs text-slate-500">
               {summary.runsByStatus.map((item) => `${item.status}: ${item.count}`).join(' · ')}
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="text-sm text-slate-500">Pending outbound</div>
+            <div className="mt-2 text-3xl font-semibold text-slate-900">
+              {summary.channelDelivery.pendingOutbound}
+            </div>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="text-sm text-slate-500">Retry scheduled</div>
+            <div className="mt-2 text-3xl font-semibold text-slate-900">
+              {summary.channelDelivery.retryingOutbound}
+            </div>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="text-sm text-slate-500">Dead-lettered delivery</div>
+            <div className="mt-2 text-3xl font-semibold text-slate-900">
+              {summary.channelDelivery.deadLetterOutbound}
             </div>
           </div>
         </section>

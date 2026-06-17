@@ -5,6 +5,8 @@ function parseInteger(value: string | undefined, fallback: number) {
 
 export const SUPPORT_QUEUE_NAME = 'support';
 export const SUPPORT_DEAD_LETTER_QUEUE_NAME = 'support-dead-letter';
+export const CHANNEL_DELIVERY_QUEUE_NAME =
+  process.env.CHANNEL_DELIVERY_QUEUE_NAME?.trim() || 'channel-delivery';
 
 export function getQueueConnection() {
   const redisUrl = process.env.REDIS_URL?.trim();

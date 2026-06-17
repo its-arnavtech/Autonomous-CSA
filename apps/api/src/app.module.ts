@@ -3,6 +3,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ApprovalsModule } from './approvals/approvals.module';
 import { AuthModule } from './auth/auth.module';
+import { ChannelsModule } from './channels/channels.module';
 import { DraftsModule } from './drafts/drafts.module';
 import { KnowledgeModule } from './knowledge/knowledge.module';
 import { ObservabilityModule } from './observability/observability.module';
@@ -19,6 +20,7 @@ import { TicketsModule } from './tickets/tickets.module';
     PrismaModule,
     SupportModule,
     AuthModule,
+    ChannelsModule,
     QueueModule,
     RateLimitModule,
     ObservabilityModule,

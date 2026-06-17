@@ -121,7 +121,7 @@ export class SupportService {
       priority: ticket.priority,
       createdAt: ticket.createdAt,
       updatedAt: ticket.updatedAt,
-      latestMessagePreview: this.truncate(ticket.messages[0]?.body),
+      latestMessagePreview: this.truncate(ticket.messages[0]?.body ?? null),
       latestTimelineEvent: ticket.events[0]
         ? {
             type: ticket.events[0].type,

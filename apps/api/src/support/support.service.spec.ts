@@ -13,7 +13,7 @@ describe('SupportService', () => {
   function createService() {
     const prisma = {
       organization: { findUnique: jest.fn() },
-      ticket: { findFirst: jest.fn() },
+      ticket: { findFirst: jest.fn(), findMany: jest.fn() },
       agentStep: { findMany: jest.fn() },
       knowledgeRetrieval: { findMany: jest.fn() },
       outboundDraft: { findFirst: jest.fn() },
@@ -75,6 +75,32 @@ describe('SupportService', () => {
       create: { orgId: 'org_1' },
     });
     expect(settings.requireHumanApproval).toBe(true);
+  });
+
+  it('returns null latest fields when a listed ticket has no messages or events', async () => {
+    const { prisma, service } = createService();
+    const createdAt = new Date('2026-06-17T00:00:00.000Z');
+    prisma.ticket.findMany.mockResolvedValue([
+      {
+        id: 'ticket_1',
+        subject: 'No messages yet',
+        customerEmail: 'customer@example.test',
+        customerName: 'Customer',
+        status: TicketStatus.OPEN,
+        priority: TicketPriority.NORMAL,
+        createdAt,
+        updatedAt: createdAt,
+        messages: [],
+        events: [],
+      },
+    ]);
+
+    await expect(service.listTickets('org_1')).resolves.toEqual([
+      expect.objectContaining({
+        latestMessagePreview: null,
+        latestTimelineEvent: null,
+      }),
+    ]);
   });
 
   it('writes a timeline event when ticket status changes', async () => {
