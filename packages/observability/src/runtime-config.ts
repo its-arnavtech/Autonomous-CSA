@@ -284,7 +284,7 @@ function parseUrl(
 function validateSecret(
   name: string,
   value: string | undefined,
-  isProduction: boolean,
+  enforceStrong: boolean,
   errors: string[],
 ) {
   if (!value?.trim()) {
@@ -293,12 +293,12 @@ function validateSecret(
   }
 
   const trimmed = value.trim();
-  if (isProduction && trimmed.length < 32) {
-    errors.push(`${name} must be at least 32 characters in production`);
+  if (enforceStrong && trimmed.length < 32) {
+    errors.push(`${name} must be at least 32 characters in production-like environments`);
   }
 
-  if (isProduction && PLACEHOLDER_SECRET_PATTERNS.some((pattern) => pattern.test(trimmed))) {
-    errors.push(`${name} must not use a placeholder value in production`);
+  if (enforceStrong && PLACEHOLDER_SECRET_PATTERNS.some((pattern) => pattern.test(trimmed))) {
+    errors.push(`${name} must not use a placeholder value in production-like environments`);
   }
 
   return trimmed;
@@ -532,13 +532,13 @@ export function loadApiRuntimeConfig(env: RuntimeEnv = process.env): ApiRuntimeC
   const accessSecret = validateSecret(
     'JWT_ACCESS_SECRET',
     env.JWT_ACCESS_SECRET,
-    isProduction,
+    isProductionLike,
     errors,
   );
   const refreshSecret = validateSecret(
     'JWT_REFRESH_SECRET',
     env.JWT_REFRESH_SECRET,
-    isProduction,
+    isProductionLike,
     errors,
   );
   const accessTtlSeconds = parseDurationToSeconds(

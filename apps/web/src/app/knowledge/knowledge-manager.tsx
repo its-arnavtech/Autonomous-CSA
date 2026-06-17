@@ -21,11 +21,11 @@ type KnowledgeManagerProps = {
 function statusTone(status: KnowledgeArticle['status']) {
   switch (status) {
     case 'PUBLISHED':
-      return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+      return 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30';
     case 'ARCHIVED':
-      return 'bg-zinc-100 text-zinc-700 ring-zinc-200';
+      return 'bg-zinc-500/20 text-zinc-300 ring-zinc-500/30';
     default:
-      return 'bg-amber-50 text-amber-700 ring-amber-200';
+      return 'bg-amber-500/15 text-amber-300 ring-amber-500/30';
   }
 }
 
@@ -144,33 +144,33 @@ export function KnowledgeManager({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-900">Create Knowledge Article</h2>
+      <div className="rounded-3xl border border-white/10 bg-ink-850/70 p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-mist-50">Create Knowledge Article</h2>
 
         <div className="mt-5 grid gap-4">
           <input
-            className="rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
+            className="rounded-2xl border border-white/15 px-3 py-2 text-sm text-mist-50"
             placeholder="Article title"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             disabled={isPending}
           />
           <textarea
-            className="min-h-36 rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
+            className="min-h-36 rounded-2xl border border-white/15 px-3 py-2 text-sm text-mist-50"
             placeholder="Article body"
             value={body}
             onChange={(event) => setBody(event.target.value)}
             disabled={isPending}
           />
           <input
-            className="rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
+            className="rounded-2xl border border-white/15 px-3 py-2 text-sm text-mist-50"
             placeholder="Tags (comma separated)"
             value={tags}
             onChange={(event) => setTags(event.target.value)}
             disabled={isPending}
           />
           <select
-            className="rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
+            className="rounded-2xl border border-white/15 px-3 py-2 text-sm text-mist-50"
             value={status}
             onChange={(event) => setStatus(event.target.value as KnowledgeArticle['status'])}
             disabled={isPending}
@@ -184,34 +184,34 @@ export function KnowledgeManager({
               type="button"
               onClick={createArticle}
               disabled={isPending || title.trim().length === 0 || body.trim().length === 0}
-              className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="rounded-2xl bg-iris-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-iris-600/40 disabled:text-white/50"
             >
               {isPending ? 'Saving...' : 'Create Article'}
             </button>
-            {message ? <span className="text-sm text-emerald-700">{message}</span> : null}
-            {error ? <span className="text-sm text-rose-700">{error}</span> : null}
+            {message ? <span className="text-sm text-emerald-300">{message}</span> : null}
+            {error ? <span className="text-sm text-rose-300">{error}</span> : null}
           </div>
         </div>
       </div>
 
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="rounded-3xl border border-white/10 bg-ink-850/70 p-6 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Knowledge Articles</h2>
-            <p className="mt-1 text-sm text-slate-500">
+            <h2 className="text-lg font-semibold text-mist-50">Knowledge Articles</h2>
+            <p className="mt-1 text-sm text-mist-400">
               Deterministic retrieval sources for the support runtime.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <input
-              className="rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              className="rounded-2xl border border-white/15 px-3 py-2 text-sm text-mist-50"
               placeholder="Search title, body, or tags"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               disabled={isPending}
             />
             <select
-              className="rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              className="rounded-2xl border border-white/15 px-3 py-2 text-sm text-mist-50"
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value)}
               disabled={isPending}
@@ -225,7 +225,7 @@ export function KnowledgeManager({
               type="button"
               onClick={() => refreshWithFilters()}
               disabled={isPending}
-              className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700"
+              className="rounded-2xl border border-white/15 bg-ink-850/70 px-4 py-2 text-sm font-medium text-mist-200"
             >
               Apply Filters
             </button>
@@ -234,7 +234,7 @@ export function KnowledgeManager({
 
         <div className="mt-5 space-y-4">
           {initialArticles.length === 0 ? (
-            <p className="text-sm text-slate-500">No knowledge articles found for this filter.</p>
+            <p className="text-sm text-mist-400">No knowledge articles found for this filter.</p>
           ) : (
             initialArticles.map((article) => (
               <KnowledgeArticleCard
@@ -266,11 +266,11 @@ function KnowledgeArticleCard({
   const [draft, setDraft] = useState(article);
 
   return (
-    <article className="rounded-2xl border border-slate-200 p-4">
+    <article className="rounded-2xl border border-white/10 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="font-medium text-slate-900">{article.title}</div>
-          <div className="mt-1 text-xs text-slate-400">
+          <div className="font-medium text-mist-50">{article.title}</div>
+          <div className="mt-1 text-xs text-mist-500">
             Updated {new Date(article.updatedAt).toLocaleString()}
           </div>
         </div>
@@ -283,19 +283,19 @@ function KnowledgeArticleCard({
 
       <div className="mt-4 grid gap-3">
         <input
-          className="rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
+          className="rounded-2xl border border-white/15 px-3 py-2 text-sm text-mist-50"
           value={draft.title}
           onChange={(event) => setDraft({ ...draft, title: event.target.value })}
           disabled={isPending}
         />
         <textarea
-          className="min-h-28 rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
+          className="min-h-28 rounded-2xl border border-white/15 px-3 py-2 text-sm text-mist-50"
           value={draft.body}
           onChange={(event) => setDraft({ ...draft, body: event.target.value })}
           disabled={isPending}
         />
         <input
-          className="rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
+          className="rounded-2xl border border-white/15 px-3 py-2 text-sm text-mist-50"
           value={draft.tags.join(', ')}
           onChange={(event) =>
             setDraft({
@@ -310,7 +310,7 @@ function KnowledgeArticleCard({
         />
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <select
-            className="rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
+            className="rounded-2xl border border-white/15 px-3 py-2 text-sm text-mist-50"
             value={draft.status}
             onChange={(event) =>
               setDraft({
@@ -328,7 +328,7 @@ function KnowledgeArticleCard({
             type="button"
             onClick={() => onSave(draft)}
             disabled={isPending}
-            className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="rounded-2xl bg-iris-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-iris-600/40 disabled:text-white/50"
           >
             Save Article
           </button>
@@ -336,7 +336,7 @@ function KnowledgeArticleCard({
             type="button"
             onClick={() => onArchive(article.id)}
             disabled={isPending || draft.status === 'ARCHIVED'}
-            className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:text-slate-400"
+            className="rounded-2xl border border-white/15 bg-ink-850/70 px-4 py-2 text-sm font-medium text-mist-200 disabled:cursor-not-allowed disabled:text-mist-500"
           >
             Archive
           </button>

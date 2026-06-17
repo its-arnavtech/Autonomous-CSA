@@ -9,7 +9,6 @@
 ## Authentication And Tenancy
 
 - [Authentication](AUTH.md): token, cookie, membership, and RBAC contracts.
-- [Phase 8 closeout](PHASE_8_AUTH_TENANCY.md): historical implementation record; current validation numbers live in the final report.
 
 ## Agent Runtime
 
@@ -71,9 +70,6 @@
 
 - [v1 release notes](RELEASE_NOTES_V1.md)
 - [Known limitations](KNOWN_LIMITATIONS.md)
-- [Portfolio summary](PORTFOLIO_SUMMARY.md)
-- [Interview guide](INTERVIEW_GUIDE.md)
 - [Demo script](DEMO_SCRIPT.md)
-- [Current status](status.md)
 
-Historical phase documents remain implementation records, not sources for current test counts or release status. The final validation report and known-limitations document are authoritative for v1.0.
+The final validation report and known-limitations document are authoritative for v1.0.

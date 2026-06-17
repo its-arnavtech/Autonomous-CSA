@@ -101,11 +101,11 @@ export default async function OperationsPage({
         activeMembership={context.activeMembership}
       >
         <main className="mx-auto max-w-4xl px-6 py-8">
-          <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6">
+          <div className="rounded-3xl border border-amber-500/30 bg-amber-500/15 p-6">
             <h2 className="text-lg font-semibold text-amber-900">
               Operations access is not available for this role
             </h2>
-            <p className="mt-2 text-sm text-amber-800">
+            <p className="mt-2 text-sm text-amber-200">
               Contact an organization owner or admin if you need access.
             </p>
           </div>
@@ -166,11 +166,11 @@ export default async function OperationsPage({
 
     content = (
       <main className="mx-auto max-w-6xl px-6 py-8">
-        <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6">
-          <h2 className="text-lg font-semibold text-rose-800">
+        <div className="rounded-3xl border border-rose-500/30 bg-rose-500/15 p-6">
+          <h2 className="text-lg font-semibold text-rose-200">
             Failed to load operations view
           </h2>
-          <pre className="mt-3 overflow-auto rounded-2xl bg-white/80 p-4 text-xs text-slate-800">
+          <pre className="mt-3 overflow-auto rounded-2xl bg-ink-850/80 p-4 text-xs text-mist-100">
             {details.join('\n\n')}
           </pre>
         </div>
@@ -185,88 +185,88 @@ export default async function OperationsPage({
     content = (
       <main className="mx-auto max-w-6xl space-y-8 px-6 py-8">
         <div className="space-y-2">
-          <h2 className="text-3xl font-semibold tracking-tight text-slate-900">
+          <h2 className="text-3xl font-semibold tracking-tight text-mist-50">
             Operations
           </h2>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-mist-400">
             Tenant-scoped diagnostics for{' '}
-            <span className="font-medium text-slate-700">
+            <span className="font-medium text-mist-200">
               {context.activeMembership.organizationName}
             </span>
           </p>
         </div>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Active queue work</div>
-            <div className="mt-2 text-3xl font-semibold text-slate-900">
+          <div className="rounded-3xl border border-white/10 bg-ink-850/70 p-5 shadow-sm">
+            <div className="text-sm text-mist-400">Active queue work</div>
+            <div className="mt-2 text-3xl font-semibold text-mist-50">
               {summary.queueHealth.activeRuns}
             </div>
-            <div className="mt-2 text-xs text-slate-500">
+            <div className="mt-2 text-xs text-mist-400">
               Unresolved failures: {summary.queueHealth.unresolvedFailures}
             </div>
           </div>
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Blocked runs</div>
-            <div className="mt-2 text-3xl font-semibold text-slate-900">
+          <div className="rounded-3xl border border-white/10 bg-ink-850/70 p-5 shadow-sm">
+            <div className="text-sm text-mist-400">Blocked runs</div>
+            <div className="mt-2 text-3xl font-semibold text-mist-50">
               {summary.blockedRuns}
             </div>
-            <div className="mt-2 text-xs text-slate-500">
+            <div className="mt-2 text-xs text-mist-400">
               Pending approvals: {summary.pendingApprovals}
             </div>
           </div>
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="text-sm text-slate-500">LLM usage</div>
-            <div className="mt-2 text-3xl font-semibold text-slate-900">
+          <div className="rounded-3xl border border-white/10 bg-ink-850/70 p-5 shadow-sm">
+            <div className="text-sm text-mist-400">LLM usage</div>
+            <div className="mt-2 text-3xl font-semibold text-mist-50">
               {summary.llmUsage.inputTokens + summary.llmUsage.outputTokens}
             </div>
-            <div className="mt-2 text-xs text-slate-500">
+            <div className="mt-2 text-xs text-mist-400">
               Estimated cost: {formatCurrency(summary.llmUsage.estimatedCostCents)}
             </div>
           </div>
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Average run duration</div>
-            <div className="mt-2 text-3xl font-semibold text-slate-900">
+          <div className="rounded-3xl border border-white/10 bg-ink-850/70 p-5 shadow-sm">
+            <div className="text-sm text-mist-400">Average run duration</div>
+            <div className="mt-2 text-3xl font-semibold text-mist-50">
               {summary.averageRunDurationMs} ms
             </div>
-            <div className="mt-2 text-xs text-slate-500">
+            <div className="mt-2 text-xs text-mist-400">
               {summary.runsByStatus.map((item) => `${item.status}: ${item.count}`).join(' · ')}
             </div>
           </div>
         </section>
 
         <section className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Pending outbound</div>
-            <div className="mt-2 text-3xl font-semibold text-slate-900">
+          <div className="rounded-lg border border-white/10 bg-ink-850/70 p-5 shadow-sm">
+            <div className="text-sm text-mist-400">Pending outbound</div>
+            <div className="mt-2 text-3xl font-semibold text-mist-50">
               {summary.channelDelivery.pendingOutbound}
             </div>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Retry scheduled</div>
-            <div className="mt-2 text-3xl font-semibold text-slate-900">
+          <div className="rounded-lg border border-white/10 bg-ink-850/70 p-5 shadow-sm">
+            <div className="text-sm text-mist-400">Retry scheduled</div>
+            <div className="mt-2 text-3xl font-semibold text-mist-50">
               {summary.channelDelivery.retryingOutbound}
             </div>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Dead-lettered delivery</div>
-            <div className="mt-2 text-3xl font-semibold text-slate-900">
+          <div className="rounded-lg border border-white/10 bg-ink-850/70 p-5 shadow-sm">
+            <div className="text-sm text-mist-400">Dead-lettered delivery</div>
+            <div className="mt-2 text-3xl font-semibold text-mist-50">
               {summary.channelDelivery.deadLetterOutbound}
             </div>
           </div>
         </section>
 
         <section className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-          <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-200 px-5 py-4">
-              <h3 className="text-lg font-semibold text-slate-900">Recent runs</h3>
+          <div className="rounded-3xl border border-white/10 bg-ink-850/70 shadow-sm">
+            <div className="border-b border-white/10 px-5 py-4">
+              <h3 className="text-lg font-semibold text-mist-50">Recent runs</h3>
             </div>
-            <div className="divide-y divide-slate-200">
+            <div className="divide-y divide-white/10">
               {runs.map((run) => (
-                <div key={run.id} className="space-y-2 px-5 py-4 text-sm text-slate-600">
+                <div key={run.id} className="space-y-2 px-5 py-4 text-sm text-mist-300">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="font-medium text-slate-900">{run.ticket.subject}</div>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                    <div className="font-medium text-mist-50">{run.ticket.subject}</div>
+                    <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-xs font-semibold text-mist-200">
                       {run.status}
                     </span>
                   </div>
@@ -278,16 +278,16 @@ export default async function OperationsPage({
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-200 px-5 py-4">
-              <h3 className="text-lg font-semibold text-slate-900">Recent failures</h3>
+          <div className="rounded-3xl border border-white/10 bg-ink-850/70 shadow-sm">
+            <div className="border-b border-white/10 px-5 py-4">
+              <h3 className="text-lg font-semibold text-mist-50">Recent failures</h3>
             </div>
-            <div className="divide-y divide-slate-200">
+            <div className="divide-y divide-white/10">
               {failures.map((failure) => (
-                <div key={failure.id} className="space-y-3 px-5 py-4 text-sm text-slate-600">
+                <div key={failure.id} className="space-y-3 px-5 py-4 text-sm text-mist-300">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="font-medium text-slate-900">{failure.errorCode}</div>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                    <div className="font-medium text-mist-50">{failure.errorCode}</div>
+                    <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-xs font-semibold text-mist-200">
                       {failure.resolvedAt ? 'Resolved' : 'Open'}
                     </span>
                   </div>
@@ -305,11 +305,11 @@ export default async function OperationsPage({
           </div>
         </section>
 
-        <section className="rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+        <section className="rounded-3xl border border-white/10 bg-ink-850/70 shadow-sm">
+          <div className="flex flex-col gap-4 border-b border-white/10 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-slate-900">Audit search</h3>
-              <p className="text-sm text-slate-500">
+              <h3 className="text-lg font-semibold text-mist-50">Audit search</h3>
+              <p className="text-sm text-mist-400">
                 Filter by event type or correlation ID, then export CSV if needed.
               </p>
             </div>
@@ -318,17 +318,17 @@ export default async function OperationsPage({
                 name="eventType"
                 defaultValue={params.eventType}
                 placeholder="Event type"
-                className="rounded-full border border-slate-200 px-3 py-2 text-sm"
+                className="rounded-full border border-white/10 px-3 py-2 text-sm"
               />
               <input
                 name="correlationId"
                 defaultValue={params.correlationId}
                 placeholder="Correlation ID"
-                className="rounded-full border border-slate-200 px-3 py-2 text-sm"
+                className="rounded-full border border-white/10 px-3 py-2 text-sm"
               />
               <button
                 type="submit"
-                className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                className="rounded-full bg-iris-600 px-4 py-2 text-sm font-semibold text-white"
               >
                 Apply
               </button>
@@ -336,24 +336,24 @@ export default async function OperationsPage({
                 href={`/api/operations/audit/export${
                   auditQuery.toString() ? `?${auditQuery.toString()}` : ''
                 }`}
-                className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
+                className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-mist-200"
               >
                 Export CSV
               </Link>
             </form>
           </div>
-          <div className="divide-y divide-slate-200">
+          <div className="divide-y divide-white/10">
             {audit.map((event) => (
-              <div key={event.id} className="space-y-2 px-5 py-4 text-sm text-slate-600">
+              <div key={event.id} className="space-y-2 px-5 py-4 text-sm text-mist-300">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="font-medium text-slate-900">{event.type}</div>
-                  <div className="text-xs text-slate-400">
+                  <div className="font-medium text-mist-50">{event.type}</div>
+                  <div className="text-xs text-mist-500">
                     {new Date(event.createdAt).toLocaleString()}
                   </div>
                 </div>
                 <div>Run: {event.runId ?? 'n/a'}</div>
                 <div>Correlation: {event.correlationId ?? 'n/a'}</div>
-                <pre className="overflow-auto rounded-2xl bg-slate-50 p-3 text-xs text-slate-700">
+                <pre className="overflow-auto rounded-2xl bg-white/[0.03] p-3 text-xs text-mist-200">
                   {JSON.stringify(event.payload, null, 2)}
                 </pre>
               </div>

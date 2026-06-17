@@ -40,10 +40,10 @@ export function DraftComposer({ ticketId }: DraftComposerProps) {
   };
 
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 p-4">
-      <h3 className="text-sm font-semibold text-slate-900">Create Manual Draft</h3>
+    <div className="rounded-2xl border border-dashed border-white/15 p-4">
+      <h3 className="text-sm font-semibold text-mist-50">Create Manual Draft</h3>
       <textarea
-        className="mt-3 min-h-28 w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
+        className="mt-3 min-h-28 w-full rounded-2xl border border-white/15 px-3 py-2 text-sm text-mist-50"
         value={body}
         onChange={(event) => setBody(event.target.value)}
         disabled={isPending}
@@ -54,12 +54,12 @@ export function DraftComposer({ ticketId }: DraftComposerProps) {
           type="button"
           onClick={createDraft}
           disabled={isPending || body.trim().length === 0}
-          className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="rounded-2xl bg-iris-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-iris-600/40 disabled:text-white/50"
         >
           {isPending ? 'Creating...' : 'Create Draft'}
         </button>
-        {success ? <span className="text-sm text-emerald-700">{success}</span> : null}
-        {error ? <span className="text-sm text-rose-700">{error}</span> : null}
+        {success ? <span className="text-sm text-emerald-300">{success}</span> : null}
+        {error ? <span className="text-sm text-rose-300">{error}</span> : null}
       </div>
     </div>
   );

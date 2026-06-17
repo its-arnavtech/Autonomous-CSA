@@ -49,11 +49,11 @@ export default async function ChannelsPage() {
   if (!response.ok) {
     content = (
       <main className="mx-auto max-w-6xl px-6 py-8">
-        <div className="rounded-lg border border-rose-200 bg-rose-50 p-5">
-          <h2 className="text-lg font-semibold text-rose-800">
+        <div className="rounded-lg border border-rose-500/30 bg-rose-500/15 p-5">
+          <h2 className="text-lg font-semibold text-rose-200">
             Failed to load channel connections
           </h2>
-          <pre className="mt-3 overflow-auto rounded-md bg-white/80 p-3 text-xs text-slate-800">
+          <pre className="mt-3 overflow-auto rounded-md bg-ink-850/80 p-3 text-xs text-mist-100">
             {await response.text()}
           </pre>
         </div>
@@ -64,12 +64,12 @@ export default async function ChannelsPage() {
     content = (
       <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
         <div>
-          <h2 className="text-3xl font-semibold tracking-tight text-slate-900">
+          <h2 className="text-3xl font-semibold tracking-tight text-mist-50">
             Channel Connections
           </h2>
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-sm text-mist-400">
             Tenant-scoped inbound and outbound support channels for{' '}
-            <span className="font-medium text-slate-700">
+            <span className="font-medium text-mist-200">
               {context.activeMembership.organizationName}
             </span>
           </p>
@@ -77,33 +77,33 @@ export default async function ChannelsPage() {
 
         <CreateMockConnectionForm canManage={manage} />
 
-        <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 px-5 py-4">
-            <h3 className="text-lg font-semibold text-slate-900">
+        <section className="rounded-lg border border-white/10 bg-ink-850/70 shadow-sm">
+          <div className="border-b border-white/10 px-5 py-4">
+            <h3 className="text-lg font-semibold text-mist-50">
               Connections
             </h3>
           </div>
           {connections.length === 0 ? (
-            <div className="px-5 py-8 text-sm text-slate-500">
+            <div className="px-5 py-8 text-sm text-mist-400">
               No channel connections are configured.
             </div>
           ) : (
-            <div className="divide-y divide-slate-200">
+            <div className="divide-y divide-white/10">
               {connections.map((connection) => (
                 <article
                   key={connection.id}
                   className="grid gap-4 px-5 py-4 lg:grid-cols-[1fr_auto]"
                 >
-                  <div className="space-y-2 text-sm text-slate-600">
+                  <div className="space-y-2 text-sm text-mist-300">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="text-base font-semibold text-slate-900">
+                      <h4 className="text-base font-semibold text-mist-50">
                         {connection.displayName}
                       </h4>
-                      <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
+                      <span className="rounded-md bg-white/[0.06] px-2 py-1 text-xs font-semibold text-mist-200">
                         {connection.status}
                       </span>
                       {connection.isDefault ? (
-                        <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+                        <span className="rounded-md bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-300">
                           Default
                         </span>
                       ) : null}
@@ -120,7 +120,7 @@ export default async function ChannelsPage() {
                         : 'n/a'}
                     </div>
                     {connection.lastErrorCode ? (
-                      <div className="rounded-md bg-rose-50 p-3 text-rose-700">
+                      <div className="rounded-md bg-rose-500/15 p-3 text-rose-300">
                         {connection.lastErrorCode}: {connection.lastErrorRedacted}
                       </div>
                     ) : null}

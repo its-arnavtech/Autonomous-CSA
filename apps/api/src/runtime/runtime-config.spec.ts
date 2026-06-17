@@ -131,6 +131,23 @@ describe('runtime configuration validation', () => {
     ).toThrow(/JWT_ACCESS_SECRET/);
   });
 
+  it('enforces strong JWT secrets for staging even when NODE_ENV is not production', () => {
+    expect(() =>
+      loadApiRuntimeConfig({
+        NODE_ENV: 'development',
+        APP_ENV: 'staging',
+        ALLOW_LOCAL_STAGING: 'true',
+        PORT: '3001',
+        DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/app',
+        REDIS_URL: 'redis://localhost:6379',
+        JWT_ACCESS_SECRET: 'replace-with-real-secret-value-123456789',
+        JWT_REFRESH_SECRET: 'short',
+        CORS_ALLOWED_ORIGINS: 'https://app-staging.example.net',
+        METRICS_ENABLED: 'false',
+      }),
+    ).toThrow(/JWT_ACCESS_SECRET[\s\S]*JWT_REFRESH_SECRET|JWT_REFRESH_SECRET/);
+  });
+
   it('rejects invalid numeric and boolean settings', () => {
     expect(() =>
       loadApiRuntimeConfig({

@@ -18,7 +18,7 @@ export function OperationsActions({
   const [isPending, startTransition] = useTransition();
 
   if (!canManage) {
-    return <span className="text-xs text-slate-400">Read-only</span>;
+    return <span className="text-xs text-mist-500">Read-only</span>;
   }
 
   const handleReplay = () => {
@@ -75,7 +75,7 @@ export function OperationsActions({
           type="button"
           onClick={handleReplay}
           disabled={isPending}
-          className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 disabled:opacity-50"
+          className="rounded-full border border-sky-500/30 bg-sky-500/15 px-3 py-1 text-xs font-semibold text-sky-300 disabled:opacity-50"
         >
           Replay
         </button>
@@ -83,7 +83,7 @@ export function OperationsActions({
           type="button"
           onClick={handleResolve}
           disabled={isPending}
-          className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 disabled:opacity-50"
+          className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300 disabled:opacity-50"
         >
           Resolve
         </button>
@@ -92,9 +92,9 @@ export function OperationsActions({
         value={note}
         onChange={(event) => setNote(event.target.value)}
         placeholder="Resolution note"
-        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-700 outline-none ring-0"
+        className="w-full rounded-xl border border-white/10 px-3 py-2 text-xs text-mist-200 outline-none ring-0"
       />
-      {error ? <p className="text-xs text-rose-600">{error}</p> : null}
+      {error ? <p className="text-xs text-rose-300">{error}</p> : null}
     </div>
   );
 }
