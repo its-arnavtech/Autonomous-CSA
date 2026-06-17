@@ -70,11 +70,8 @@ function shouldSummarizeKey(key: string) {
 }
 
 function sanitizeString(value: string) {
-  if (CONNECTION_STRING_PATTERN.test(value)) {
-    return value.replace(CONNECTION_STRING_PATTERN, REDACTED);
-  }
-
-  return value;
+  // Always replace: RegExp.test() with a global expression carries state across calls.
+  return value.replace(CONNECTION_STRING_PATTERN, REDACTED);
 }
 
 export function sanitizeForLog(

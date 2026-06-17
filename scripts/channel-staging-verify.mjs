@@ -48,7 +48,7 @@ const results = {
   ids: {},
   load: {},
 };
-const runTag = `phase12-${Date.now()}`;
+const runTag = `v1-${Date.now()}`;
 
 function tag(name) {
   return `${runTag}-${name}`;
@@ -74,6 +74,20 @@ function run(command, args, options = {}) {
 
 function compose(args, options = {}) {
   return run('docker', [...composeBase, ...args], options);
+}
+
+function clearSyntheticAuthRateLimits() {
+  if (stagingEnv.ALLOW_LOCAL_STAGING !== 'true') {
+    throw new Error('Refusing to clear auth rate limits outside the local staging profile');
+  }
+  compose([
+    'exec',
+    '-T',
+    'redis',
+    'sh',
+    '-lc',
+    `redis-cli -a "$REDIS_PASSWORD" --no-auth-warning EVAL "local keys=redis.call('KEYS', ARGV[1]); if #keys == 0 then return 0 end; return redis.call('DEL', unpack(keys))" 0 'rate-limit:auth:*'`,
+  ], { capture: true });
 }
 
 function shQuote(value) {
@@ -497,6 +511,7 @@ async function main() {
   await waitReady('api');
   await waitReady('worker');
   await waitReady('web');
+  clearSyntheticAuthRateLimits();
 
   const owner = await login(stagingEnv.STAGING_OWNER_EMAIL);
   const viewer = await login(stagingEnv.STAGING_VIEWER_EMAIL);

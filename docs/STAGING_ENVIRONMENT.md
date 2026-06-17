@@ -8,7 +8,7 @@ Status: matrix defined; secret values are intentionally absent.
 | --- | --- |
 | `NODE_ENV` | `production` |
 | `APP_ENV` | `staging` |
-| `APP_VERSION` | Release candidate or staging version, for example `0.11.0-staging` |
+| `APP_VERSION` | Release candidate or staging version, for example `1.0.0-staging` |
 | `GIT_SHA` | Exact deployed commit SHA |
 | `BUILD_TIMESTAMP` | Build timestamp from CI |
 | `DATABASE_URL` | Hosted PostgreSQL 18 URL, not localhost, not production |

@@ -60,6 +60,14 @@ describe('Phase 9 redaction and log safety', () => {
     expect(withStack.errorCode).toBe('ERROR');
   });
 
+  it('redacts connection strings across repeated calls', () => {
+    const first = sanitizeForLog('redis://default:first-secret@redis:6379/0');
+    const second = sanitizeForLog('postgresql://user:second-secret@db:5432/app');
+
+    expect(first).toBe('[REDACTED]');
+    expect(second).toBe('[REDACTED]');
+  });
+
   it('writes structured logs with correlation IDs and without leaking credentials', () => {
     const logger = new StructuredLogger('phase9-test');
     const stdoutSpy = jest
