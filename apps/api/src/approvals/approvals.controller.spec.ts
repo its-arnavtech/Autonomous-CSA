@@ -22,13 +22,19 @@ describe('ApprovalsController', () => {
       getApprovalOrThrow: jest.fn(),
       appendTimelineEvent: jest.fn(),
     };
+    const channelsService = {
+      createOutboundForApprovedDraft: jest.fn().mockResolvedValue(null),
+      enqueueDelivery: jest.fn(),
+    };
 
     return {
       prisma,
       supportService,
+      channelsService,
       controller: new ApprovalsController(
         prisma as never,
         supportService as never,
+        channelsService as never,
       ),
     };
   }

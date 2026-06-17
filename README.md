@@ -103,3 +103,16 @@ Supporting docs:
 - [docs/SECRETS.md](/C:/Autonomous-CSA/docs/SECRETS.md)
 - [docs/STAGING_READINESS.md](/C:/Autonomous-CSA/docs/STAGING_READINESS.md)
 - [docs/FAILURE_INJECTION.md](/C:/Autonomous-CSA/docs/FAILURE_INJECTION.md)
+# Support Channel Integration
+
+Phase 12 adds zero-spend mock support channel integration. Start with `/channels` to create a `MOCK_EMAIL` connection, then use:
+
+```powershell
+pnpm channel:mock:inbound
+pnpm channel:mock:duplicate
+pnpm channel:mock:invalid-signature
+pnpm channel:mock:reply
+pnpm channel:mock:delivery
+```
+
+See `docs/CHANNEL_ARCHITECTURE.md`, `docs/CHANNEL_WEBHOOK_SECURITY.md`, `docs/CHANNEL_OUTBOX.md`, and `docs/CHANNEL_TESTING.md`.

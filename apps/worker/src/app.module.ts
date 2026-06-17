@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 import {
   getQueueConnection,
   getQueueDefaults,
+  CHANNEL_DELIVERY_QUEUE_NAME,
   SUPPORT_DEAD_LETTER_QUEUE_NAME,
   SUPPORT_QUEUE_NAME,
 } from './queue/queue.config';
@@ -14,6 +15,7 @@ import { RetrieverAgent } from './agent-runtime/retriever.agent';
 import { ResolverAgent } from './agent-runtime/resolver.agent';
 import { RouterAgent } from './agent-runtime/router.agent';
 import { SupportProcessor } from './support.processor';
+import { ChannelDeliveryProcessor } from './channels/channel-delivery.processor';
 import { GuardrailService } from './guardrails/guardrail.service';
 import { LlmService } from './llm/llm.service';
 import { ObservabilityModule } from './observability/observability.module';
@@ -42,6 +44,7 @@ const queueDefaults = getQueueDefaults();
     }),
     BullModule.registerQueue({ name: SUPPORT_QUEUE_NAME }),
     BullModule.registerQueue({ name: SUPPORT_DEAD_LETTER_QUEUE_NAME }),
+    BullModule.registerQueue({ name: CHANNEL_DELIVERY_QUEUE_NAME }),
     PrismaModule,
     ObservabilityModule,
   ],
@@ -49,6 +52,7 @@ const queueDefaults = getQueueDefaults();
   providers: [
     AppService,
     SupportProcessor,
+    ChannelDeliveryProcessor,
     AgentRuntimeService,
     RouterAgent,
     RetrieverAgent,

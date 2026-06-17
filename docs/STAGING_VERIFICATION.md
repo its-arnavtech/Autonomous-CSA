@@ -116,3 +116,19 @@ Hosted Fly attempt notes:
 - Fly Upstash Redis add-on creation required billing configuration for the trial organization.
 - Private Redis fallback app deployed, but trial machines could not remain running longer than five minutes.
 - The Redis/BullMQ hosted gate is deferred by the zero-spend policy. Local/CI Redis/BullMQ verification is the active Phase 11A gate.
+# Phase 12 Channel Verification Addendum
+
+Use the local production-like staging stack with mock channels only.
+
+Required channel checks:
+
+1. Create a mock channel connection.
+2. Send a signed inbound mock webhook.
+3. Verify receipt, customer, conversation, external message, ticket, timeline, and queued agent run.
+4. Approve the generated draft.
+5. Verify `OutboundMessage`, `DeliveryAttempt`, and timeline delivery events.
+6. Send a duplicate webhook and confirm no duplicate ticket/message/run.
+7. Test retryable and permanent mock failure modes.
+8. Confirm dead-letter and owner/admin replay behavior.
+
+These checks were documented but not fully executed in this workspace during the implementation turn.

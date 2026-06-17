@@ -4,6 +4,7 @@ import {
   AgentRunTrigger,
   ApprovalStatus,
   MessageDirection,
+  OutboundMessageStatus,
   Prisma,
   nextEventSequence,
 } from '@agentic-support/db';
@@ -55,6 +56,10 @@ export class OperationsService {
       llmUsage,
       runDurations,
       queuedRuns,
+      pendingOutbound,
+      retryingOutbound,
+      deadLetterOutbound,
+      recentChannelFailures,
     ] = await Promise.all([
       this.prisma.ticket.groupBy({
         by: ['status'],
@@ -98,6 +103,37 @@ export class OperationsService {
           status: { in: [AgentRunStatus.QUEUED, AgentRunStatus.RUNNING] },
         },
       }),
+      this.prisma.outboundMessage.count({
+        where: { organizationId: orgId, status: OutboundMessageStatus.PENDING },
+      }),
+      this.prisma.outboundMessage.count({
+        where: {
+          organizationId: orgId,
+          status: OutboundMessageStatus.RETRY_SCHEDULED,
+        },
+      }),
+      this.prisma.outboundMessage.count({
+        where: {
+          organizationId: orgId,
+          status: OutboundMessageStatus.DEAD_LETTER,
+        },
+      }),
+      this.prisma.outboundMessage.findMany({
+        where: {
+          organizationId: orgId,
+          lastErrorCode: { not: null },
+        },
+        orderBy: [{ updatedAt: 'desc' }],
+        take: 5,
+        select: {
+          id: true,
+          ticketId: true,
+          status: true,
+          lastErrorCode: true,
+          lastErrorRedacted: true,
+          updatedAt: true,
+        },
+      }),
     ]);
 
     return {
@@ -132,6 +168,12 @@ export class OperationsService {
       queueHealth: {
         activeRuns: queuedRuns,
         unresolvedFailures,
+      },
+      channelDelivery: {
+        pendingOutbound,
+        retryingOutbound,
+        deadLetterOutbound,
+        recentFailures: recentChannelFailures,
       },
     };
   }

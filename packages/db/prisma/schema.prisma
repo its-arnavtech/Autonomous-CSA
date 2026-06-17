@@ -24,6 +24,14 @@ model Organization {
   knowledgeArticles   KnowledgeArticle[]
   knowledgeRetrievals KnowledgeRetrieval[]
   operationalFailures OperationalFailure[]
+  channelConnections  ChannelConnection[]
+  externalCustomers   ExternalCustomer[]
+  conversations       Conversation[]
+  externalMessages    ExternalMessage[]
+  messageAttachments  MessageAttachment[]
+  webhookReceipts     WebhookReceipt[]
+  outboundMessages    OutboundMessage[]
+  deliveryAttempts    DeliveryAttempt[]
 }
 
 model User {
@@ -41,6 +49,7 @@ model User {
   createdDrafts     OutboundDraft[] @relation("OutboundDraftCreatedByUser")
   approvedDrafts    OutboundDraft[] @relation("OutboundDraftApprovedByUser")
   sentDrafts        OutboundDraft[] @relation("OutboundDraftSentByUser")
+  approvedOutboundMessages OutboundMessage[] @relation("OutboundMessageApprovedByUser")
   resolvedOperationalFailures OperationalFailure[] @relation("OperationalFailureResolvedByUser")
 }
 
@@ -92,6 +101,8 @@ model Ticket {
   approvals     HumanApproval[]
   drafts        OutboundDraft[]
   retrievals    KnowledgeRetrieval[]
+  conversations Conversation[]
+  outboundMessages OutboundMessage[]
 
   @@index([orgId])
   @@index([orgId, status])
@@ -291,6 +302,7 @@ model OutboundDraft {
   ticket         Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   agentRun       AgentRun?    @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
   approvals      HumanApproval[]
+  outboundMessages OutboundMessage[]
   createdByUser  User?        @relation("OutboundDraftCreatedByUser", fields: [createdByUserId], references: [id], onDelete: SetNull)
   approvedByUser User?        @relation("OutboundDraftApprovedByUser", fields: [approvedByUserId], references: [id], onDelete: SetNull)
   sentByUser     User?        @relation("OutboundDraftSentByUser", fields: [sentByUserId], references: [id], onDelete: SetNull)
@@ -343,6 +355,250 @@ model OperationalFailure {
   @@index([correlationId])
   @@index([runId])
   @@index([ticketId])
+}
+
+model ChannelConnection {
+  id                            String                  @id @default(uuid())
+  publicId                      String                  @unique @default(uuid())
+  organizationId                String
+  provider                      ChannelProvider
+  displayName                   String
+  status                        ChannelConnectionStatus @default(ACTIVE)
+  externalAccountId             String?
+  inboundAddress                String?
+  secretReference               String?
+  webhookSigningSecretReference String?
+  config                        Json?
+  isDefault                     Boolean                 @default(false)
+  lastSuccessfulEventAt         DateTime?
+  lastErrorAt                   DateTime?
+  lastErrorCode                 String?
+  lastErrorRedacted             String?
+  createdAt                     DateTime                @default(now())
+  updatedAt                     DateTime                @updatedAt
+  disabledAt                    DateTime?
+  organization                  Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  externalCustomers             ExternalCustomer[]
+  conversations                 Conversation[]
+  externalMessages              ExternalMessage[]
+  webhookReceipts               WebhookReceipt[]
+  outboundMessages              OutboundMessage[]
+
+  @@unique([organizationId, provider, externalAccountId])
+  @@index([organizationId])
+  @@index([provider])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ExternalCustomer {
+  id                  String            @id @default(uuid())
+  organizationId      String
+  channelConnectionId String
+  externalCustomerId  String?
+  email               String?
+  normalizedEmail     String?
+  displayName         String?
+  metadata            Json?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  organization        Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channelConnection   ChannelConnection @relation(fields: [channelConnectionId], references: [id], onDelete: Cascade)
+  conversations       Conversation[]
+
+  @@unique([organizationId, channelConnectionId, externalCustomerId])
+  @@unique([organizationId, channelConnectionId, normalizedEmail])
+  @@index([organizationId])
+  @@index([channelConnectionId])
+  @@index([normalizedEmail])
+}
+
+model Conversation {
+  id                  String             @id @default(uuid())
+  organizationId      String
+  channelConnectionId String
+  externalCustomerId  String?
+  ticketId            String?
+  externalThreadId    String?
+  subject             String?
+  status              ConversationStatus @default(OPEN)
+  lastMessageAt       DateTime           @default(now())
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  organization        Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channelConnection   ChannelConnection  @relation(fields: [channelConnectionId], references: [id], onDelete: Cascade)
+  externalCustomer    ExternalCustomer?  @relation(fields: [externalCustomerId], references: [id], onDelete: SetNull)
+  ticket              Ticket?            @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  externalMessages    ExternalMessage[]
+  outboundMessages    OutboundMessage[]
+
+  @@unique([organizationId, channelConnectionId, externalThreadId])
+  @@index([organizationId])
+  @@index([channelConnectionId])
+  @@index([externalCustomerId])
+  @@index([ticketId])
+  @@index([lastMessageAt])
+}
+
+model ExternalMessage {
+  id                       String              @id @default(uuid())
+  organizationId           String
+  conversationId           String
+  channelConnectionId      String
+  providerMessageId        String?
+  providerEventId          String?
+  direction                ExternalMessageDirection
+  sender                   Json
+  recipients               Json
+  subject                  String?
+  textBody                 String?
+  htmlBody                 String?
+  sanitizedHtmlBody        String?
+  replyToProviderMessageId String?
+  inReplyTo                String?
+  references               Json?
+  receivedAt               DateTime?
+  sentAt                   DateTime?
+  metadata                 Json?
+  createdAt                DateTime            @default(now())
+  organization             Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation             Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  channelConnection        ChannelConnection   @relation(fields: [channelConnectionId], references: [id], onDelete: Cascade)
+  attachments              MessageAttachment[]
+  outboundMessages         OutboundMessage[]
+
+  @@unique([channelConnectionId, providerMessageId])
+  @@unique([channelConnectionId, providerEventId])
+  @@index([organizationId])
+  @@index([conversationId])
+  @@index([channelConnectionId])
+  @@index([providerMessageId])
+  @@index([providerEventId])
+  @@index([createdAt])
+}
+
+model MessageAttachment {
+  id                   String                  @id @default(uuid())
+  organizationId       String
+  externalMessageId    String
+  providerAttachmentId String?
+  filename             String
+  mimeType             String
+  sizeBytes            Int
+  contentDisposition   String?
+  contentId            String?
+  checksum             String?
+  status               MessageAttachmentStatus @default(METADATA_ONLY)
+  metadata             Json?
+  createdAt            DateTime                @default(now())
+  organization         Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  externalMessage      ExternalMessage         @relation(fields: [externalMessageId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([externalMessageId])
+  @@index([providerAttachmentId])
+  @@index([createdAt])
+}
+
+model WebhookReceipt {
+  id                     String               @id @default(uuid())
+  organizationId         String
+  channelConnectionId    String
+  provider               ChannelProvider
+  providerEventId        String
+  eventType              String
+  signatureVerified      Boolean              @default(false)
+  payloadHash            String
+  receivedAt             DateTime             @default(now())
+  processedAt            DateTime?
+  status                 WebhookReceiptStatus @default(RECEIVED)
+  failureCode            String?
+  failureMessageRedacted String?
+  correlationId          String?
+  retryCount             Int                  @default(0)
+  metadata               Json?
+  organization           Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channelConnection      ChannelConnection    @relation(fields: [channelConnectionId], references: [id], onDelete: Cascade)
+
+  @@unique([channelConnectionId, providerEventId])
+  @@index([organizationId])
+  @@index([channelConnectionId])
+  @@index([providerEventId])
+  @@index([status])
+  @@index([receivedAt])
+}
+
+model OutboundMessage {
+  id                       String                @id @default(uuid())
+  organizationId           String
+  conversationId           String
+  channelConnectionId      String
+  ticketId                 String
+  draftId                  String
+  externalMessageId        String?
+  idempotencyKey           String                @unique
+  status                   OutboundMessageStatus @default(PENDING)
+  subject                  String?
+  textBody                 String
+  htmlBody                 String?
+  recipients               Json
+  providerMessageId        String?
+  approvedByUserId         String?
+  approvedAt               DateTime?
+  queuedAt                 DateTime              @default(now())
+  processingStartedAt      DateTime?
+  sentAt                   DateTime?
+  deliveredAt              DateTime?
+  failedAt                 DateTime?
+  nextAttemptAt            DateTime?
+  attemptCount             Int                   @default(0)
+  maxAttempts              Int                   @default(3)
+  leaseOwner               String?
+  leaseExpiresAt           DateTime?
+  lastErrorCode            String?
+  lastErrorRedacted        String?
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+  organization             Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation             Conversation          @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  channelConnection        ChannelConnection     @relation(fields: [channelConnectionId], references: [id], onDelete: Restrict)
+  ticket                   Ticket                @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  draft                    OutboundDraft         @relation(fields: [draftId], references: [id], onDelete: Restrict)
+  externalMessage          ExternalMessage?      @relation(fields: [externalMessageId], references: [id], onDelete: SetNull)
+  approvedByUser           User?                 @relation("OutboundMessageApprovedByUser", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  deliveryAttempts         DeliveryAttempt[]
+
+  @@unique([channelConnectionId, providerMessageId])
+  @@index([organizationId])
+  @@index([conversationId])
+  @@index([channelConnectionId])
+  @@index([ticketId])
+  @@index([draftId])
+  @@index([status, nextAttemptAt])
+  @@index([createdAt])
+}
+
+model DeliveryAttempt {
+  id                  String                 @id @default(uuid())
+  organizationId      String
+  outboundMessageId   String
+  attemptNumber       Int
+  startedAt           DateTime               @default(now())
+  completedAt         DateTime?
+  outcome             DeliveryAttemptOutcome
+  providerStatusCode  Int?
+  providerErrorCode   String?
+  retryable           Boolean                @default(false)
+  responseMetadata    Json?
+  errorRedacted       String?
+  correlationId       String?
+  organization        Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  outboundMessage     OutboundMessage        @relation(fields: [outboundMessageId], references: [id], onDelete: Cascade)
+
+  @@unique([outboundMessageId, attemptNumber])
+  @@index([organizationId])
+  @@index([outboundMessageId])
+  @@index([startedAt])
 }
 
 enum TicketStatus {
@@ -454,6 +710,29 @@ enum AgentEventType {
   LLM_CALL_FAILED
   LLM_FALLBACK_USED
   LLM_USAGE_RECORDED
+  CHANNEL_CONNECTION_CREATED
+  CHANNEL_CONNECTION_UPDATED
+  CHANNEL_CONNECTION_DISABLED
+  CHANNEL_CONNECTION_ENABLED
+  CHANNEL_CONNECTION_TESTED
+  CHANNEL_WEBHOOK_RECEIVED
+  CHANNEL_WEBHOOK_DUPLICATE
+  CHANNEL_WEBHOOK_REJECTED
+  CHANNEL_CUSTOMER_MATCHED
+  CHANNEL_CONVERSATION_CREATED
+  CHANNEL_MESSAGE_RECEIVED
+  CHANNEL_TICKET_CREATED
+  CHANNEL_ATTACHMENT_RECORDED
+  CHANNEL_DRAFT_APPROVED_FOR_DELIVERY
+  CHANNEL_OUTBOUND_QUEUED
+  CHANNEL_DELIVERY_ATTEMPT_STARTED
+  CHANNEL_DELIVERY_RETRY_SCHEDULED
+  CHANNEL_MESSAGE_SENT
+  CHANNEL_MESSAGE_DELIVERED
+  CHANNEL_MESSAGE_FAILED
+  CHANNEL_MESSAGE_DEAD_LETTERED
+  CHANNEL_MESSAGE_REPLAYED
+  CHANNEL_OUTBOUND_CANCELLED
 }
 
 enum KnowledgeArticleStatus {
@@ -488,4 +767,61 @@ enum ActorType {
   USER
   AGENT
   SYSTEM
+}
+
+enum ChannelProvider {
+  MOCK_EMAIL
+  GENERIC_EMAIL
+}
+
+enum ChannelConnectionStatus {
+  ACTIVE
+  DISABLED
+  ERROR
+}
+
+enum ConversationStatus {
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
+enum ExternalMessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageAttachmentStatus {
+  METADATA_ONLY
+  AVAILABLE
+  REJECTED
+  QUARANTINED
+}
+
+enum WebhookReceiptStatus {
+  RECEIVED
+  VERIFIED
+  PROCESSING
+  PROCESSED
+  DUPLICATE
+  REJECTED
+  FAILED
+}
+
+enum OutboundMessageStatus {
+  PENDING
+  PROCESSING
+  SENT
+  DELIVERED
+  RETRY_SCHEDULED
+  FAILED
+  DEAD_LETTER
+  CANCELLED
+}
+
+enum DeliveryAttemptOutcome {
+  SUCCEEDED
+  RETRYABLE_FAILURE
+  PERMANENT_FAILURE
+  UNKNOWN
 }

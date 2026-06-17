@@ -69,3 +69,16 @@ Validation run from `C:\Autonomous-CSA` during the Phase 8 closeout.
 - Hosted PostgreSQL version was verified as `18.3`. Fly Upstash Redis required billing configuration, so `fly.redis.toml` and `ops/redis/Dockerfile` define the private Redis fallback for future use.
 - No billing method will be attached. Hosted Phase 11B gates are deferred by the zero-spend infrastructure policy, not treated as a technical failure.
 - Active Phase 11A work uses `docker-compose.staging.yml`, `.env.staging.example`, and `pnpm staging:local:*` commands to verify production images, PostgreSQL 18, Redis/BullMQ, migrations, seed, smoke, backup, and restore locally/CI without paid services.
+# Phase 12 Status
+
+Support channel integration foundation has been added on `support-integration`:
+
+- Tenant-scoped channel schema and migration.
+- Mock email provider abstraction.
+- Signed webhook ingestion with receipt idempotency.
+- External customer, conversation, message, attachment metadata, and ticket/run creation.
+- Approval-to-outbound transactional state.
+- Channel delivery worker with attempts, retry scheduling, dead-letter, and replay.
+- Channel management UI and ticket delivery visibility.
+
+Phase 12 is not yet declared complete because full local E2E verification, backup/restore, load/concurrency tests, Docker validation, restart drills, and push verification have not all been completed in this workspace.
