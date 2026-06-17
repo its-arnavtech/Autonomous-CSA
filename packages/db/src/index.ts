@@ -1,19 +1,28 @@
 export {
   ApprovalStatus,
+  ChannelConnectionStatus,
+  ChannelProvider,
+  ConversationStatus,
+  DeliveryAttemptOutcome,
   AgentEventType,
   AgentRunStatus,
   AgentRunTrigger,
   AgentStepStatus,
   AgentStepType,
   DraftStatus,
+  ExternalMessageDirection,
+  InboundDispatchStatus,
   KnowledgeArticleStatus,
+  MessageAttachmentStatus,
   MessageDirection,
   MessageStatus,
+  OutboundMessageStatus,
   OperationalFailure,
   Prisma,
   PrismaClient,
   TicketPriority,
   TicketStatus,
+  WebhookReceiptStatus,
 } from '@prisma/client';
 
 export {

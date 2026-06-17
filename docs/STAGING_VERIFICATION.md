@@ -116,3 +116,34 @@ Hosted Fly attempt notes:
 - Fly Upstash Redis add-on creation required billing configuration for the trial organization.
 - Private Redis fallback app deployed, but trial machines could not remain running longer than five minutes.
 - The Redis/BullMQ hosted gate is deferred by the zero-spend policy. Local/CI Redis/BullMQ verification is the active Phase 11A gate.
+# Phase 12 Channel Verification Addendum
+
+Use the local production-like staging stack with mock channels only.
+
+Required channel checks:
+
+1. Create a mock channel connection.
+2. Send a signed inbound mock webhook.
+3. Verify receipt, customer, conversation, external message, ticket, timeline, queued agent run, and inbound dispatch row.
+4. Approve the generated draft.
+5. Verify inbound dispatch completes after BullMQ enqueue.
+6. Verify `OutboundMessage`, `DeliveryAttempt`, and timeline delivery events.
+7. Send a duplicate webhook and confirm no duplicate ticket/message/run/dispatch.
+8. Test retryable and permanent mock failure modes.
+9. Confirm dead-letter and owner/admin replay behavior.
+
+Run the automated production-image channel gate after `pnpm staging:local:verify`:
+
+```powershell
+pnpm channel:staging:verify
+```
+
+The passing June 17, 2026 run wrote `run-output/channel-staging-results.json` and covered:
+
+- Raw-byte signature acceptance and whitespace/order/invalid/missing signature rejection.
+- Concurrent duplicate webhook suppression with one receipt/message/conversation/ticket/dispatch.
+- Approval-to-outbound delivery, sent/delivered callback ordering, and duplicate approval protection.
+- Retryable timeout/429/503 recovery and permanent invalid-recipient/malformed dead-letter plus owner replay.
+- Redis-down inbound/outbound recovery, worker restart, API restart, Redis restart, Postgres outage response, and Postgres restart.
+- Bounded channel load with 20 requests, p95 236 ms, zero request errors, and 9 duplicate suppressions.
+- Channel-data backup/restore row-count parity for connections, customers, conversations, messages, receipts, outbounds, attempts, and inbound dispatches.

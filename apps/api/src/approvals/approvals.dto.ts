@@ -1,7 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApprovalStatus } from '@agentic-support/db';
 import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 
-const approvalDecisionValues = ['APPROVED', 'REJECTED'] as const;
+const approvalDecisionValues = [
+  ApprovalStatus.APPROVED,
+  ApprovalStatus.REJECTED,
+] as const;
 
 export type ApprovalDecision = (typeof approvalDecisionValues)[number];
 

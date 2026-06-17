@@ -45,6 +45,13 @@ type MetricsState = {
   knowledgeRetrievalsTotal: Counter<'outcome'>;
   knowledgeResultsCount: Histogram<'outcome'>;
   knowledgeUsedTotal: Counter<'source'>;
+  channelWebhooksTotal: Counter<'provider' | 'eventType' | 'outcome'>;
+  channelWebhookSignatureFailuresTotal: Counter<'provider'>;
+  channelDuplicateWebhooksTotal: Counter<'provider'>;
+  channelInboundMessagesTotal: Counter<'provider'>;
+  channelConversationsCreatedTotal: Counter<'provider'>;
+  channelTicketsCreatedTotal: Counter<'provider'>;
+  channelOutboundQueuedTotal: Counter<'provider'>;
 };
 
 declare global {
@@ -257,6 +264,48 @@ function getOrCreateMetricsState(): MetricsState {
       name: METRIC_NAMES.knowledgeUsedTotal,
       help: 'Knowledge-backed responses by source.',
       labelNames: ['source'],
+      registers: [registry],
+    }),
+    channelWebhooksTotal: new Counter({
+      name: METRIC_NAMES.channelWebhooksTotal,
+      help: 'Channel webhooks by provider, event type, and outcome.',
+      labelNames: ['provider', 'eventType', 'outcome'],
+      registers: [registry],
+    }),
+    channelWebhookSignatureFailuresTotal: new Counter({
+      name: METRIC_NAMES.channelWebhookSignatureFailuresTotal,
+      help: 'Channel webhook signature failures by provider.',
+      labelNames: ['provider'],
+      registers: [registry],
+    }),
+    channelDuplicateWebhooksTotal: new Counter({
+      name: METRIC_NAMES.channelDuplicateWebhooksTotal,
+      help: 'Duplicate channel webhooks by provider.',
+      labelNames: ['provider'],
+      registers: [registry],
+    }),
+    channelInboundMessagesTotal: new Counter({
+      name: METRIC_NAMES.channelInboundMessagesTotal,
+      help: 'Inbound channel messages by provider.',
+      labelNames: ['provider'],
+      registers: [registry],
+    }),
+    channelConversationsCreatedTotal: new Counter({
+      name: METRIC_NAMES.channelConversationsCreatedTotal,
+      help: 'Channel conversations created by provider.',
+      labelNames: ['provider'],
+      registers: [registry],
+    }),
+    channelTicketsCreatedTotal: new Counter({
+      name: METRIC_NAMES.channelTicketsCreatedTotal,
+      help: 'Tickets created from channel messages by provider.',
+      labelNames: ['provider'],
+      registers: [registry],
+    }),
+    channelOutboundQueuedTotal: new Counter({
+      name: METRIC_NAMES.channelOutboundQueuedTotal,
+      help: 'Outbound channel messages queued by provider.',
+      labelNames: ['provider'],
       registers: [registry],
     }),
   };
@@ -569,5 +618,67 @@ export class MetricsService {
     }
 
     this.state.knowledgeUsedTotal.labels(source).inc();
+  }
+
+  incrementChannelWebhook(provider: string, eventType: string, outcome: string) {
+    if (!this.isEnabled()) {
+      return;
+    }
+
+    this.state.channelWebhooksTotal
+      .labels(provider.toLowerCase(), eventType.toLowerCase(), outcome)
+      .inc();
+  }
+
+  incrementChannelSignatureFailure(provider: string) {
+    if (!this.isEnabled()) {
+      return;
+    }
+
+    this.state.channelWebhookSignatureFailuresTotal
+      .labels(provider.toLowerCase())
+      .inc();
+  }
+
+  incrementChannelDuplicateWebhook(provider: string) {
+    if (!this.isEnabled()) {
+      return;
+    }
+
+    this.state.channelDuplicateWebhooksTotal.labels(provider.toLowerCase()).inc();
+  }
+
+  incrementChannelInboundMessage(provider: string) {
+    if (!this.isEnabled()) {
+      return;
+    }
+
+    this.state.channelInboundMessagesTotal.labels(provider.toLowerCase()).inc();
+  }
+
+  incrementChannelConversationCreated(provider: string) {
+    if (!this.isEnabled()) {
+      return;
+    }
+
+    this.state.channelConversationsCreatedTotal
+      .labels(provider.toLowerCase())
+      .inc();
+  }
+
+  incrementChannelTicketCreated(provider: string) {
+    if (!this.isEnabled()) {
+      return;
+    }
+
+    this.state.channelTicketsCreatedTotal.labels(provider.toLowerCase()).inc();
+  }
+
+  incrementChannelOutboundQueued(provider: string) {
+    if (!this.isEnabled()) {
+      return;
+    }
+
+    this.state.channelOutboundQueuedTotal.labels(provider.toLowerCase()).inc();
   }
 }

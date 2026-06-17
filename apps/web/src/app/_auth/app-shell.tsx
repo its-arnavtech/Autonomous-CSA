@@ -25,6 +25,9 @@ export function AppShell({
               <Link href="/knowledge" className="font-medium text-slate-700">
                 Knowledge
               </Link>
+              <Link href="/channels" className="font-medium text-slate-700">
+                Channels
+              </Link>
               <Link href="/settings" className="font-medium text-slate-700">
                 Settings
               </Link>

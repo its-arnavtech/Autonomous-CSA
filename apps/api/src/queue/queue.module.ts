@@ -4,6 +4,7 @@ import { QueueController } from './queue.controller';
 import {
   getQueueConnection,
   getQueueDefaults,
+  CHANNEL_DELIVERY_QUEUE_NAME,
   SUPPORT_DEAD_LETTER_QUEUE_NAME,
   SUPPORT_QUEUE_NAME,
 } from './queue.config';
@@ -31,6 +32,7 @@ const queueDefaults = getQueueDefaults();
     }),
     BullModule.registerQueue({ name: SUPPORT_QUEUE_NAME }),
     BullModule.registerQueue({ name: SUPPORT_DEAD_LETTER_QUEUE_NAME }),
+    BullModule.registerQueue({ name: CHANNEL_DELIVERY_QUEUE_NAME }),
   ],
   controllers: [QueueController],
   providers: [QueueLifecycleService],

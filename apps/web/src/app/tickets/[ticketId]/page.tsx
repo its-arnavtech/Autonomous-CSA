@@ -101,6 +101,64 @@ type TicketPageProps = {
   params: { ticketId: string } | Promise<{ ticketId: string }>;
 };
 
+type ChannelConversation = {
+  id: string;
+  subject: string | null;
+  status: string;
+  externalThreadId: string | null;
+  channel: {
+    provider: string;
+    displayName: string;
+    status: string;
+  };
+  customer: {
+    email: string | null;
+    displayName: string | null;
+  } | null;
+  lastMessageAt: string;
+} | null;
+
+type ChannelMessage = {
+  id: string;
+  direction: string;
+  subject: string | null;
+  textBody: string | null;
+  sanitizedHtmlBody: string | null;
+  providerMessageId: string | null;
+  createdAt: string;
+  attachments: Array<{
+    id: string;
+    filename: string;
+    mimeType: string;
+    sizeBytes: number;
+    status: string;
+  }>;
+};
+
+type OutboundMessage = {
+  id: string;
+  status: string;
+  subject: string | null;
+  textBody: string;
+  providerMessageId: string | null;
+  attemptCount: number;
+  maxAttempts: number;
+  lastErrorCode: string | null;
+  lastErrorRedacted: string | null;
+  createdAt: string;
+  sentAt: string | null;
+  deliveredAt: string | null;
+  deliveryAttempts: Array<{
+    id: string;
+    attemptNumber: number;
+    outcome: string;
+    retryable: boolean;
+    errorRedacted: string | null;
+    startedAt: string;
+    completedAt: string | null;
+  }>;
+};
+
 function badgeTone(kind: 'status' | 'priority', value: string) {
   if (kind === 'status') {
     switch (value) {
@@ -178,21 +236,39 @@ export default async function TicketPage({ params }: TicketPageProps) {
   const approvalsUrl = `${context.baseUrl}/api/tickets/${encodeURIComponent(ticketId)}/approvals`;
   const retrievalsUrl = `${context.baseUrl}/api/tickets/${encodeURIComponent(ticketId)}/retrievals`;
   const guardrailsUrl = `${context.baseUrl}/api/tickets/${encodeURIComponent(ticketId)}/guardrails`;
+  const conversationUrl = `${context.baseUrl}/api/tickets/${encodeURIComponent(ticketId)}/conversation`;
+  const channelMessagesUrl = `${context.baseUrl}/api/tickets/${encodeURIComponent(ticketId)}/channel-messages`;
+  const outboundMessagesUrl = `${context.baseUrl}/api/tickets/${encodeURIComponent(ticketId)}/outbound-messages`;
 
   let detailRes: Response;
   let timelineRes: Response;
   let approvalsRes: Response;
   let retrievalsRes: Response;
   let guardrailsRes: Response;
+  let conversationRes: Response;
+  let channelMessagesRes: Response;
+  let outboundMessagesRes: Response;
 
   try {
-    [detailRes, timelineRes, approvalsRes, retrievalsRes, guardrailsRes] =
+    [
+      detailRes,
+      timelineRes,
+      approvalsRes,
+      retrievalsRes,
+      guardrailsRes,
+      conversationRes,
+      channelMessagesRes,
+      outboundMessagesRes,
+    ] =
       await Promise.all([
         fetch(detailUrl, { cache: 'no-store', headers: { cookie: context.cookieHeader } }),
         fetch(timelineUrl, { cache: 'no-store', headers: { cookie: context.cookieHeader } }),
         fetch(approvalsUrl, { cache: 'no-store', headers: { cookie: context.cookieHeader } }),
         fetch(retrievalsUrl, { cache: 'no-store', headers: { cookie: context.cookieHeader } }),
         fetch(guardrailsUrl, { cache: 'no-store', headers: { cookie: context.cookieHeader } }),
+        fetch(conversationUrl, { cache: 'no-store', headers: { cookie: context.cookieHeader } }),
+        fetch(channelMessagesUrl, { cache: 'no-store', headers: { cookie: context.cookieHeader } }),
+        fetch(outboundMessagesUrl, { cache: 'no-store', headers: { cookie: context.cookieHeader } }),
       ]);
   } catch (error) {
     return (
@@ -211,7 +287,10 @@ export default async function TicketPage({ params }: TicketPageProps) {
     !timelineRes.ok ||
     !approvalsRes.ok ||
     !retrievalsRes.ok ||
-    !guardrailsRes.ok
+    !guardrailsRes.ok ||
+    !conversationRes.ok ||
+    !channelMessagesRes.ok ||
+    !outboundMessagesRes.ok
   ) {
     const failures = await Promise.all([
       detailRes.text(),
@@ -219,6 +298,9 @@ export default async function TicketPage({ params }: TicketPageProps) {
       approvalsRes.text(),
       retrievalsRes.text(),
       guardrailsRes.text(),
+      conversationRes.text(),
+      channelMessagesRes.text(),
+      outboundMessagesRes.text(),
     ]);
 
     return (
@@ -233,6 +315,9 @@ export default async function TicketPage({ params }: TicketPageProps) {
               approvals: failures[2],
               retrievals: failures[3],
               guardrails: failures[4],
+              conversation: failures[5],
+              channelMessages: failures[6],
+              outboundMessages: failures[7],
             },
             null,
             2,
@@ -242,14 +327,35 @@ export default async function TicketPage({ params }: TicketPageProps) {
     );
   }
 
-  const [ticket, timeline, approvals, retrievals, guardrails] =
+  const [
+    ticket,
+    timeline,
+    approvals,
+    retrievals,
+    guardrails,
+    conversation,
+    channelMessages,
+    outboundMessages,
+  ] =
     (await Promise.all([
       detailRes.json(),
       timelineRes.json(),
       approvalsRes.json(),
       retrievalsRes.json(),
       guardrailsRes.json(),
-    ])) as [TicketDetail, TimelineEvent[], Approval[], Retrieval[], GuardrailCheck[]];
+      conversationRes.json(),
+      channelMessagesRes.json(),
+      outboundMessagesRes.json(),
+    ])) as [
+      TicketDetail,
+      TimelineEvent[],
+      Approval[],
+      Retrieval[],
+      GuardrailCheck[],
+      ChannelConversation,
+      ChannelMessage[],
+      OutboundMessage[],
+    ];
 
   const content = (
     <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
@@ -323,6 +429,142 @@ export default async function TicketPage({ params }: TicketPageProps) {
                     <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
                       {message.body}
                     </p>
+                  </article>
+                ))
+              )}
+            </div>
+          </div>
+
+          {conversation ? (
+            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 className="text-lg font-semibold text-slate-900">
+                Channel Context
+              </h2>
+              <dl className="mt-4 grid gap-3 text-sm text-slate-600 md:grid-cols-2">
+                <div>
+                  <dt className="font-medium text-slate-900">Provider</dt>
+                  <dd>{conversation.channel.provider}</dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-slate-900">Connection</dt>
+                  <dd>{conversation.channel.displayName}</dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-slate-900">Customer</dt>
+                  <dd>
+                    {conversation.customer?.displayName ??
+                      conversation.customer?.email ??
+                      'Unknown'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-slate-900">Thread</dt>
+                  <dd className="break-all">
+                    {conversation.externalThreadId ?? 'n/a'}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          ) : null}
+
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">
+              Channel Messages
+            </h2>
+            <div className="mt-4 space-y-3">
+              {channelMessages.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  No external channel messages are linked to this ticket.
+                </p>
+              ) : (
+                channelMessages.map((message) => (
+                  <article
+                    key={message.id}
+                    className="rounded-lg border border-slate-200 p-4"
+                  >
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <span className="text-sm font-medium text-slate-800">
+                        {message.direction}
+                      </span>
+                      <span className="text-xs text-slate-400">
+                        {new Date(message.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="mt-2 break-all text-xs text-slate-400">
+                      Provider message: {message.providerMessageId ?? 'n/a'}
+                    </div>
+                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                      {message.textBody ?? message.sanitizedHtmlBody ?? '(empty message)'}
+                    </p>
+                    {message.attachments.length > 0 ? (
+                      <div className="mt-3 space-y-2">
+                        {message.attachments.map((attachment) => (
+                          <div
+                            key={attachment.id}
+                            className="rounded-md bg-slate-50 p-3 text-xs text-slate-600"
+                          >
+                            <div className="font-medium text-slate-900">
+                              {attachment.filename}
+                            </div>
+                            <div>
+                              {attachment.mimeType} - {attachment.sizeBytes} bytes -{' '}
+                              {attachment.status}
+                            </div>
+                            <div>Metadata only; content is not downloaded.</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </article>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">
+              Outbound Delivery
+            </h2>
+            <div className="mt-4 space-y-3">
+              {outboundMessages.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  No outbound channel messages are queued for this ticket.
+                </p>
+              ) : (
+                outboundMessages.map((message) => (
+                  <article
+                    key={message.id}
+                    className="rounded-lg border border-slate-200 p-4"
+                  >
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <span className="text-sm font-medium text-slate-800">
+                        {message.status}
+                      </span>
+                      <span className="text-xs text-slate-400">
+                        Attempts {message.attemptCount}/{message.maxAttempts}
+                      </span>
+                    </div>
+                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                      {message.textBody}
+                    </p>
+                    {message.lastErrorCode ? (
+                      <div className="mt-3 rounded-md bg-rose-50 p-3 text-xs text-rose-700">
+                        {message.lastErrorCode}: {message.lastErrorRedacted}
+                      </div>
+                    ) : null}
+                    {message.deliveryAttempts.length > 0 ? (
+                      <div className="mt-3 space-y-2">
+                        {message.deliveryAttempts.map((attempt) => (
+                          <div
+                            key={attempt.id}
+                            className="rounded-md bg-slate-50 p-3 text-xs text-slate-600"
+                          >
+                            Attempt {attempt.attemptNumber}: {attempt.outcome}
+                            {attempt.errorRedacted ? ` - ${attempt.errorRedacted}` : ''}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </article>
                 ))
               )}
