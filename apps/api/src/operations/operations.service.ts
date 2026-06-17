@@ -459,6 +459,16 @@ export class OperationsService {
       }
     ).channelAuditEvent;
 
+    // `eventType` is dual-purpose: it filters agent events by their enum
+    // `type` and channel audit events by their free-form `action`. Only apply
+    // the agent-event type filter when the value is a valid AgentEventType so a
+    // channel-action value does not trigger a Postgres enum cast error.
+    const agentEventTypeFilter =
+      query.eventType &&
+      (Object.values(AgentEventType) as string[]).includes(query.eventType)
+        ? (query.eventType as AgentEventType)
+        : undefined;
+
     const [events, channelEvents] = await Promise.all([
       this.prisma.agentEvent.findMany({
       where: {
@@ -467,7 +477,7 @@ export class OperationsService {
           gte: boundedStart,
           lte: end,
         },
-        type: query.eventType as any,
+        type: agentEventTypeFilter,
         ticketId: query.ticketId,
         runId: query.runId,
         correlationId: query.correlationId,
