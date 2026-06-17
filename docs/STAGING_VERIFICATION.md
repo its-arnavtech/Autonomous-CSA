@@ -145,5 +145,5 @@ The passing June 17, 2026 run wrote `run-output/channel-staging-results.json` an
 - Approval-to-outbound delivery, sent/delivered callback ordering, and duplicate approval protection.
 - Retryable timeout/429/503 recovery and permanent invalid-recipient/malformed dead-letter plus owner replay.
 - Redis-down inbound/outbound recovery, worker restart, API restart, Redis restart, Postgres outage response, and Postgres restart.
-- Bounded channel load with 20 requests, p95 236 ms, zero request errors, and 9 duplicate suppressions.
+- Final bounded local channel load on June 17, 2026: 20 requests at concurrency 5, p50 75 ms, p95 329 ms, p99 364 ms, zero request errors, and 9 duplicate suppressions. These are local correctness measurements, not a production capacity claim.
 - Channel-data backup/restore row-count parity for connections, customers, conversations, messages, receipts, outbounds, attempts, and inbound dispatches.

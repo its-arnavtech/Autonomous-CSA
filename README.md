@@ -1,119 +1,94 @@
-# Autonomous-CSA
-A web app where a “company” can connect an inbox (start with a built-in inbox, add Gmail/Zendesk later), and the AI agent will classify and prioritize tickets then pull necessary data(docs, past tickets) then decide whether to answer or ask clarifying questions or escalate draft a response 
+# Autonomous CSA
 
-- Set up monorepo web/api/worker architecture
-- Implemented async ticket processing via BullMQ + Redis
-- Added worker-based ticket processor (ticket.process)
-- Introduced append-only agent timeline events
-- Exposed timeline API endpoint (GET /tickets/:id/timeline)
-- Added Next.js proxy route for API access
-- Built initial Ticket page UI to render agent timeline
-- Hardened server-side fetching and error handling
-- Fixed App Router layout requirements and global styles
+A production-oriented agentic customer-support platform using a Router, Retriever, Resolver, and Critic pipeline, persistent execution state, tool-driven workflows, guardrails, human approval, and reliable asynchronous delivery.
 
-## Authentication
+**Status:** v1.0 release candidate; feature-complete portfolio-grade MVP; locally production-validated. Production deployment is not claimed, and hosted staging is deferred under a strict zero-spend policy.
 
-Phase 8 adds first-party authentication, organization memberships, refresh-token rotation, tenant-aware API guards, and role-based authorization. The browser now talks to Next.js route handlers, which store access and refresh tokens in HttpOnly cookies (`au_access_token`, `au_refresh_token`) plus the selected tenant cookie (`au_organization_id`) and forward a verified `X-Organization-Id` header to the Nest API.
+## Capabilities
 
-For local development, seed data now creates a demo owner account:
+- Multi-tenant organizations with first-party authentication, rotating refresh sessions, HttpOnly cookies, and OWNER/ADMIN/AGENT/VIEWER RBAC.
+- Ticket, message, timeline, agent-run, step, knowledge-retrieval, guardrail, approval, and draft lifecycles.
+- Router, Retriever, Resolver, and Critic orchestration with OpenAI/Anthropic abstractions and deterministic local fallback.
+- Signed inbound channel webhooks, durable idempotency, conversation threading, customer matching, and attachment metadata sanitization.
+- Transactional outbound delivery with bounded retries, delivery callbacks, dead-letter visibility, and authorized replay.
+- Structured logging, correlation IDs, Prometheus metrics, health/readiness, distributed rate limiting, backup/restore, and failure drills.
 
-- Email: `demo.owner@example.com`
-- Password: `DemoPassword123!`
+## Architecture
 
-Primary browser entry points:
-
-- `/login`
-- `/register`
-- `/tickets`
-- `/knowledge`
-- `/settings`
-
-See [docs/AUTH.md](/C:/Autonomous-CSA/docs/AUTH.md) for the request flow, cookie/header contract, RBAC behavior, and bootstrap details. See [docs/PHASE_8_AUTH_TENANCY.md](/C:/Autonomous-CSA/docs/PHASE_8_AUTH_TENANCY.md) for the full Phase 8 closeout report.
-
-## Observability And Operations
-
-Phase 9 adds structured logs, request and job correlation, `/health/live`, `/health/ready`, Prometheus `/metrics`, queue failure persistence, dead-letter handling, and a tenant-scoped `/operations` UI for runs, failures, and audit search/export.
-
-See:
-
-- [docs/OBSERVABILITY.md](/C:/Autonomous-CSA/docs/OBSERVABILITY.md)
-- [docs/OPERATIONS.md](/C:/Autonomous-CSA/docs/OPERATIONS.md)
-- [docs/QUEUE_FAILURES.md](/C:/Autonomous-CSA/docs/QUEUE_FAILURES.md)
-
-## CI/CD
-
-GitHub Actions now cover quality checks, Prisma migration validation, security scanning, Docker build readiness, CodeQL, and Dependabot hygiene. See [docs/CI_CD.md](/C:/Autonomous-CSA/docs/CI_CD.md) for the workflow breakdown, local equivalent commands, and failure handling guidance.
-
-## Phase 11 Staging
-
-Phase 11 is split into two tracks:
-
-- Phase 11A: zero-cost production-like local and CI staging verification
-- Phase 11B: hosted Fly.io staging deployment, explicitly deferred by the zero-spend infrastructure policy
-
-The Fly.io foundation remains in the repository for future use. The trial verified hosted PostgreSQL `18.3` and provisioned the Redis fallback, but trial machines could not remain running longer than five minutes and no billing method will be attached.
-
-The repo includes separate Fly manifests for future hosted staging:
-
-- `fly.web.toml`
-- `fly.api.toml`
-- `fly.worker.toml`
-- `fly.redis.toml`
-
-Active Phase 11A local staging commands:
-
-- `pnpm staging:local:up`
-- `pnpm staging:local:verify`
-- `pnpm staging:local:logs`
-- `pnpm staging:local:down`
-- `pnpm staging:local:reset`
-
-These commands use `docker-compose.staging.yml`, PostgreSQL 18, persistent Redis, production API/worker/web images, a dedicated migration container, generated local-only secrets under ignored `run-output/`, and deterministic LLM behavior. Hosted staging is not complete and production deployment is not approved.
-
-See:
-
-- [docs/STAGING_PLATFORM_DECISION.md](/C:/Autonomous-CSA/docs/STAGING_PLATFORM_DECISION.md)
-- [docs/STAGING_ARCHITECTURE.md](/C:/Autonomous-CSA/docs/STAGING_ARCHITECTURE.md)
-- [docs/STAGING_ENVIRONMENT.md](/C:/Autonomous-CSA/docs/STAGING_ENVIRONMENT.md)
-- [docs/STAGING_DEPLOYMENT.md](/C:/Autonomous-CSA/docs/STAGING_DEPLOYMENT.md)
-- [docs/STAGING_VERIFICATION.md](/C:/Autonomous-CSA/docs/STAGING_VERIFICATION.md)
-
-## Phase 10 Hardening
-
-Local Docker infrastructure now uses PostgreSQL 18 for the `postgres` service. PostgreSQL 18 stores data under a version-specific `PGDATA` path (`/var/lib/postgresql/18/docker`) and the Compose volume is mounted at `/var/lib/postgresql` through the new `postgres-data-v18` volume. The previous PostgreSQL 16 volume is intentionally retained as a temporary rollback source until migration sign-off and the agreed retention window have both completed.
-
-Operational hardening commands:
-
-- `pnpm db:migrate:check`
-- `pnpm db:backup`
-- `pnpm db:restore <backup-file> --target-database-url=...`
-- `pnpm db:backup:verify <backup-file>`
-- `pnpm load:smoke`
-- `pnpm load:staging`
-- `pnpm staging:smoke`
-- `pnpm maintenance:cleanup`
-- `./scripts/staging-readiness.sh`
-
-Supporting docs:
-
-- [docs/SECURITY_DEPENDENCIES.md](/C:/Autonomous-CSA/docs/SECURITY_DEPENDENCIES.md)
-- [docs/BACKUP_RESTORE.md](/C:/Autonomous-CSA/docs/BACKUP_RESTORE.md)
-- [docs/LOAD_TESTING.md](/C:/Autonomous-CSA/docs/LOAD_TESTING.md)
-- [docs/MIGRATIONS.md](/C:/Autonomous-CSA/docs/MIGRATIONS.md)
-- [docs/SECRETS.md](/C:/Autonomous-CSA/docs/SECRETS.md)
-- [docs/STAGING_READINESS.md](/C:/Autonomous-CSA/docs/STAGING_READINESS.md)
-- [docs/FAILURE_INJECTION.md](/C:/Autonomous-CSA/docs/FAILURE_INJECTION.md)
-# Support Channel Integration
-
-Phase 12 adds zero-spend mock support channel integration with raw-byte webhook signatures and DB-backed inbound dispatch recovery. Start with `/channels` to create a `MOCK_EMAIL` connection, then use:
-
-```powershell
-pnpm channel:mock:inbound
-pnpm channel:mock:duplicate
-pnpm channel:mock:invalid-signature
-pnpm channel:mock:reply
-pnpm channel:mock:delivery
-pnpm channel:staging:verify
+```mermaid
+flowchart LR
+  Browser["Operator browser"] --> Web["Next.js web and BFF"]
+  Provider["Support channel provider"] --> Webhook["Signed webhook endpoint"]
+  Web --> API["NestJS API"]
+  Webhook --> API
+  API --> DB[("PostgreSQL 18 source of truth")]
+  API --> Redis[("Redis / BullMQ")]
+  Redis --> Worker["NestJS worker"]
+  Worker --> DB
+  Worker --> LLM["Deterministic, OpenAI, or Anthropic provider"]
+  Worker --> Provider
 ```
 
-See `docs/CHANNEL_ARCHITECTURE.md`, `docs/CHANNEL_WEBHOOK_SECURITY.md`, `docs/CHANNEL_OUTBOX.md`, and `docs/CHANNEL_TESTING.md`.
+The system is agentic because it performs a persisted, multi-stage decision workflow: Router classifies and chooses a path, Retriever gathers tenant-scoped knowledge, Resolver constructs a proposed action, and Critic evaluates it before guardrails and approval policy determine whether a draft can proceed. Agent runs, steps, tool results, costs, failures, and human decisions are durable. Python is not required for those properties; TypeScript is the orchestration runtime.
+
+## Reliable Channel Flow
+
+Inbound raw bytes are HMAC-verified before parsing. A unique webhook receipt suppresses replays, then the API resolves the connection's organization, matches the external customer and conversation, persists the inbound message and ticket, and dispatches a job. Outbound approval creates one durable message record; the worker claims it, records delivery attempts, retries transient failures within a bound, dead-letters permanent failures, and applies idempotent delivery callbacks.
+
+## Stack
+
+Next.js 16, React 19, NestJS 11, TypeScript, Prisma 6, PostgreSQL 18, Redis 7, BullMQ 5, pnpm workspaces, Turborepo, Docker Compose, Jest, GitHub Actions, CodeQL, Gitleaks, Semgrep, and Trivy.
+
+## Quick Start
+
+Prerequisites: Node.js 22, pnpm 10.29.1, and Docker Desktop.
+
+```powershell
+pnpm.cmd install --frozen-lockfile
+docker compose up -d
+pnpm.cmd db:migrate:deploy
+pnpm.cmd db:seed
+pnpm.cmd dev
+```
+
+The development seed creates `demo.owner@example.com`; its local-only password is documented in the seed and must never be reused outside development.
+
+## One-Command Demo
+
+```powershell
+pnpm.cmd demo:up
+```
+
+This builds production API/worker/web images, starts PostgreSQL 18 and Redis, applies all migrations, seeds deterministic users/data, verifies readiness and RBAC, executes a signed inbound channel workflow through agent draft approval and mock delivery, exercises retry/dead-letter/replay and restart drills, and verifies backup/restore. Generated credentials remain under ignored `run-output/` and are not printed.
+
+```powershell
+pnpm.cmd demo:verify
+pnpm.cmd demo:down
+pnpm.cmd demo:reset
+```
+
+## Verified Results
+
+Final local validation on June 17, 2026 passed 212 automated tests (90 API, 91 worker, 7 web, 24 script utilities), lint, typecheck, build, Prisma validation, 13 fresh/idempotent migrations, all three production Docker image builds, PostgreSQL 18.4 backup/restore, and Redis/BullMQ compatibility. The final bounded mock-channel drill issued 20 local requests at concurrency 5: p50 75 ms, p95 329 ms, p99 364 ms, 0% request errors, and 9 duplicate deliveries suppressed. These are local verification measurements, not production capacity or an SLA.
+
+## Repository
+
+- `apps/web`: operator UI and same-origin API proxy.
+- `apps/api`: authenticated REST API, tenancy, webhooks, operations, and queue producers.
+- `apps/worker`: agent pipeline and transactional delivery consumers.
+- `packages/db`: Prisma schema, migrations, seed, and database helpers.
+- `packages/observability`: runtime validation, logging, redaction, metrics, and correlation.
+- `scripts`: demo, staging, channel, load, backup, and restore verification.
+- `docs`: architecture, security, operations, runbooks, release, and portfolio material.
+
+Start with the [documentation index](docs/README.md), [architecture](docs/ARCHITECTURE.md), [final overview](docs/FINAL_SYSTEM_OVERVIEW.md), [security audit](docs/FINAL_SECURITY_AUDIT.md), and [validation report](docs/FINAL_VALIDATION_REPORT.md).
+
+## Limitations
+
+No production or persistent hosted staging deployment exists. The mock email provider proves the channel contract without external delivery. Real Gmail/Zendesk adapters, SSO, invitations, billing, object storage for attachment bytes, managed secrets, multi-region failover, and production-scale load testing remain outside v1.0. See [known limitations](docs/KNOWN_LIMITATIONS.md).
+
+Fly.io manifests are retained as an opt-in deployment foundation, but the default workflow cannot deploy and no billing will be attached. Hosted staging is deferred under the zero-spend policy.
+
+## License
+
+UNLICENSED. This repository is provided as a portfolio project; no open-source license grant is made.

@@ -12,6 +12,9 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 env:
   NODE_VERSION: "22"
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agentic_support
@@ -125,7 +128,6 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-      security-events: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6

@@ -102,7 +102,7 @@ function ensureEnv({ force = false } = {}) {
     APP_ENV: 'staging',
     NODE_ENV: 'production',
     ALLOW_LOCAL_STAGING: 'true',
-    APP_VERSION: '0.11.0-local',
+    APP_VERSION: '1.0.0-local',
     GIT_SHA: sha,
     BUILD_TIMESTAMP: new Date().toISOString(),
     POSTGRES_USER: 'postgres',
@@ -165,6 +165,20 @@ function ensureEnv({ force = false } = {}) {
 
 function compose(args, options) {
   return run(docker, [...composeBase, ...args], options);
+}
+
+function clearSyntheticAuthRateLimits(env) {
+  if (env.ALLOW_LOCAL_STAGING !== 'true') {
+    throw new Error('Refusing to clear auth rate limits outside the local staging profile');
+  }
+  compose([
+    'exec',
+    '-T',
+    'redis',
+    'sh',
+    '-lc',
+    `redis-cli -a "$REDIS_PASSWORD" --no-auth-warning EVAL "local keys=redis.call('KEYS', ARGV[1]); if #keys == 0 then return 0 end; return redis.call('DEL', unpack(keys))" 0 'rate-limit:auth:*'`,
+  ], { capture: true });
 }
 
 function hostEnv(env) {
@@ -233,6 +247,7 @@ async function verify() {
   await waitForHttp('http://localhost:3102/health/ready', 'worker readiness');
   await waitForHttp('http://localhost:3100/api/version', 'web readiness');
   results.checks.readiness = 'passed';
+  clearSyntheticAuthRateLimits(env);
 
   compose(['run', '--rm', 'migration']);
   results.checks.migrationIdempotency = 'passed';

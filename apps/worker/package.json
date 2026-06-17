@@ -1,8 +1,7 @@
 {
   "name": "@apps/worker",
-  "version": "0.0.1",
-  "description": "",
-  "author": "",
+  "version": "1.0.0",
+  "description": "Autonomous CSA asynchronous agent and delivery worker",
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
