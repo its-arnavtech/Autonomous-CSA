@@ -3,6 +3,10 @@ import { ChannelsService } from './channels.service';
 
 function createService() {
   const prisma = {
+    outboundMessage: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
     inboundDispatch: {
       findMany: jest.fn(),
       updateMany: jest.fn(),
@@ -29,6 +33,7 @@ function createService() {
   return {
     prisma,
     supportQueue,
+    deliveryQueue,
     service: new ChannelsService(
       prisma as never,
       supportQueue as never,
@@ -55,6 +60,24 @@ const dispatch = {
 };
 
 describe('ChannelsService inbound dispatch reconciliation', () => {
+  it('uses attempt-scoped delivery job ids so replayed outbounds can be re-enqueued', async () => {
+    const { prisma, deliveryQueue, service } = createService();
+    prisma.outboundMessage.findUnique.mockResolvedValue({
+      id: 'outbound_1',
+      attemptCount: 1,
+    });
+    deliveryQueue.add.mockResolvedValue({ id: 'channel-delivery-outbound_1-1' });
+
+    await expect(service.enqueueDelivery('outbound_1')).resolves.toBe(
+      'channel-delivery-outbound_1-1',
+    );
+    expect(deliveryQueue.add).toHaveBeenCalledWith(
+      'send-outbound-message',
+      { outboundMessageId: 'outbound_1' },
+      { jobId: 'channel-delivery-outbound_1-1' },
+    );
+  });
+
   it('marks dispatch completed after a successful queue enqueue', async () => {
     const { prisma, supportQueue, service } = createService();
     prisma.inboundDispatch.findMany.mockResolvedValue([dispatch]);

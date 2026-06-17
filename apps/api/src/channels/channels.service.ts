@@ -76,12 +76,35 @@ const INBOUND_DISPATCH_RETRY_DELAY_MS = Math.max(
   ),
   500,
 );
+const QUEUE_ENQUEUE_TIMEOUT_MS = Math.max(
+  Number.parseInt(process.env.CHANNEL_QUEUE_ENQUEUE_TIMEOUT_MS ?? '3000', 10),
+  500,
+);
 
 function redactedMessage(error: unknown) {
   return (
     truncateText(error instanceof Error ? error.message : String(error), 500) ??
     'Unknown channel error'
   );
+}
+
+async function withQueueEnqueueTimeout<T>(operation: Promise<T>): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error('Queue enqueue timed out')),
+          QUEUE_ENQUEUE_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
 }
 
 function isUniqueConstraint(error: unknown) {
@@ -669,13 +692,38 @@ export class ChannelsService {
   }
 
   async enqueueDelivery(outboundMessageId: string) {
-    const job = await this.deliveryQueue.add(
-      'send-outbound-message',
-      { outboundMessageId },
-      { jobId: `channel-delivery-${outboundMessageId}` },
-    );
+    try {
+      const outbound = await this.prisma.outboundMessage.findUnique({
+        where: { id: outboundMessageId },
+        select: { attemptCount: true },
+      });
+      if (!outbound) {
+        return null;
+      }
 
-    return String(job.id);
+      const job = await withQueueEnqueueTimeout(
+        this.deliveryQueue.add(
+          'send-outbound-message',
+          { outboundMessageId },
+          {
+            jobId: `channel-delivery-${outboundMessageId}-${outbound.attemptCount}`,
+          },
+        ),
+      );
+
+      return String(job.id);
+    } catch (error) {
+      await this.prisma.outboundMessage
+        .update({
+          where: { id: outboundMessageId },
+          data: {
+            lastErrorCode: 'QUEUE_ENQUEUE_FAILED',
+            lastErrorRedacted: redactedMessage(error),
+          },
+        })
+        .catch(() => undefined);
+      return null;
+    }
   }
 
   async dispatchPendingInbound(limit = 25) {
@@ -760,9 +808,11 @@ export class ChannelsService {
           triggerType: string;
           enqueuedAt: string;
         };
-        const job = await this.supportQueue.add('ticket.process', payload, {
-          jobId: `support-${current.runId}`,
-        });
+        const job = await withQueueEnqueueTimeout(
+          this.supportQueue.add('ticket.process', payload, {
+            jobId: `support-${current.runId}`,
+          }),
+        );
 
         await this.prisma.inboundDispatch.update({
           where: { id: current.id },
@@ -1358,20 +1408,22 @@ export class ChannelsService {
     correlationId?: string | null;
     queuedAt: Date;
   }) {
-    await this.supportQueue.add(
-      'ticket.process',
-      {
-        orgId: run.orgId,
-        runId: run.runId,
-        ticketId: run.ticketId,
-        subject: run.subject,
-        body: run.body,
-        customerEmail: run.customerEmail,
-        correlationId: run.correlationId,
-        triggerType: AgentRunTrigger.TICKET_CREATED,
-        enqueuedAt: run.queuedAt.toISOString(),
-      },
-      { jobId: `support-${run.runId}` },
+    await withQueueEnqueueTimeout(
+      this.supportQueue.add(
+        'ticket.process',
+        {
+          orgId: run.orgId,
+          runId: run.runId,
+          ticketId: run.ticketId,
+          subject: run.subject,
+          body: run.body,
+          customerEmail: run.customerEmail,
+          correlationId: run.correlationId,
+          triggerType: AgentRunTrigger.TICKET_CREATED,
+          enqueuedAt: run.queuedAt.toISOString(),
+        },
+        { jobId: `support-${run.runId}` },
+      ),
     );
   }
 

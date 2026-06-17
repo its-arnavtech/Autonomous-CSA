@@ -20,6 +20,9 @@ Worker behavior:
 - Terminal statuses `SENT`, `DELIVERED`, `CANCELLED`, and `DEAD_LETTER` are never resent.
 - Retryable failures become `RETRY_SCHEDULED`.
 - Permanent or exhausted failures become `DEAD_LETTER` and create `OperationalFailure`.
+- API enqueue is bounded by `CHANNEL_QUEUE_ENQUEUE_TIMEOUT_MS`; enqueue failure leaves the durable row in Postgres with a redacted queue error.
+- The worker-side outbound delivery reconciler scans `PENDING`, due `RETRY_SCHEDULED`, `FAILED`, and stale `PROCESSING` rows every `CHANNEL_OUTBOUND_DELIVERY_RECONCILE_INTERVAL_MS`.
+- Delivery job ids include the outbound id and current attempt count, so duplicate approval remains idempotent while replayed dead-letter rows can be re-enqueued.
 
 Postgres is the source of truth. Redis is wake-up infrastructure.
 

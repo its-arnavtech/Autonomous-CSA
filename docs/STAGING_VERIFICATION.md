@@ -132,4 +132,18 @@ Required channel checks:
 8. Test retryable and permanent mock failure modes.
 9. Confirm dead-letter and owner/admin replay behavior.
 
-These checks are documented but were not fully executed against production images in this workspace during the implementation turn.
+Run the automated production-image channel gate after `pnpm staging:local:verify`:
+
+```powershell
+pnpm channel:staging:verify
+```
+
+The passing June 17, 2026 run wrote `run-output/channel-staging-results.json` and covered:
+
+- Raw-byte signature acceptance and whitespace/order/invalid/missing signature rejection.
+- Concurrent duplicate webhook suppression with one receipt/message/conversation/ticket/dispatch.
+- Approval-to-outbound delivery, sent/delivered callback ordering, and duplicate approval protection.
+- Retryable timeout/429/503 recovery and permanent invalid-recipient/malformed dead-letter plus owner replay.
+- Redis-down inbound/outbound recovery, worker restart, API restart, Redis restart, Postgres outage response, and Postgres restart.
+- Bounded channel load with 20 requests, p95 236 ms, zero request errors, and 9 duplicate suppressions.
+- Channel-data backup/restore row-count parity for connections, customers, conversations, messages, receipts, outbounds, attempts, and inbound dispatches.

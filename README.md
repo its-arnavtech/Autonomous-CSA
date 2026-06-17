@@ -113,6 +113,7 @@ pnpm channel:mock:duplicate
 pnpm channel:mock:invalid-signature
 pnpm channel:mock:reply
 pnpm channel:mock:delivery
+pnpm channel:staging:verify
 ```
 
 See `docs/CHANNEL_ARCHITECTURE.md`, `docs/CHANNEL_WEBHOOK_SECURITY.md`, `docs/CHANNEL_OUTBOX.md`, and `docs/CHANNEL_TESTING.md`.

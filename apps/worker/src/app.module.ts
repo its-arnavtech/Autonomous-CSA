@@ -16,6 +16,7 @@ import { ResolverAgent } from './agent-runtime/resolver.agent';
 import { RouterAgent } from './agent-runtime/router.agent';
 import { SupportProcessor } from './support.processor';
 import { ChannelDeliveryProcessor } from './channels/channel-delivery.processor';
+import { OutboundDeliveryReconcilerService } from './channels/outbound-delivery-reconciler.service';
 import { GuardrailService } from './guardrails/guardrail.service';
 import { LlmService } from './llm/llm.service';
 import { ObservabilityModule } from './observability/observability.module';
@@ -53,6 +54,7 @@ const queueDefaults = getQueueDefaults();
     AppService,
     SupportProcessor,
     ChannelDeliveryProcessor,
+    OutboundDeliveryReconcilerService,
     AgentRuntimeService,
     RouterAgent,
     RetrieverAgent,

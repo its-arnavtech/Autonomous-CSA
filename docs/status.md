@@ -81,6 +81,7 @@ Support channel integration foundation has been added on `support-integration`:
 - External customer, conversation, message, attachment metadata, and ticket/run creation.
 - Approval-to-outbound transactional state.
 - Channel delivery worker with attempts, retry scheduling, dead-letter, and replay.
+- Outbound delivery reconciler for pending/retry/stale processing rows after Redis or worker interruptions.
 - Channel management UI and ticket delivery visibility.
 - Organization-level channel audit events.
 
@@ -89,5 +90,7 @@ Verified locally in this workspace:
 - Prisma validate/generate/deploy/migrate-check for channel migrations.
 - Focused raw-signature, controller, inbound dispatch, approval, and operations tests.
 - API typecheck and lint after follow-up changes.
+- `pnpm staging:local:verify` against production Docker images, PostgreSQL 18, Redis/BullMQ, migrations, smoke, RBAC regression, and backup/restore.
+- `pnpm channel:staging:verify` on June 17, 2026 with raw webhook security, concurrent duplicate suppression, approval/outbound delivery, callback ordering, retry/permanent failure handling, replay RBAC, Redis/Postgres/API/worker drills, bounded load, and channel backup/restore evidence.
 
-Phase 12 is not yet declared complete because production-image E2E verification, backup/restore, load/concurrency tests, restart/failure drills, full root `pnpm.cmd` validation, remote push, and remote CI have not all been completed in this workspace.
+Phase 12 local implementation and production-image mock-channel verification are complete in this workspace. Remaining non-local gates are remote push/CI and any follow-up GitHub issue triage requested after the Phase 12 branch is published.
