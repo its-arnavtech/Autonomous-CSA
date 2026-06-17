@@ -14,6 +14,7 @@ import {
   ConversationStatus,
   DraftStatus,
   ExternalMessageDirection,
+  InboundDispatchStatus,
   MessageDirection,
   MessageStatus,
   OutboundMessageStatus,
@@ -64,6 +65,17 @@ const CANCEL_BLOCKED_STATUSES = new Set<OutboundMessageStatus>([
   OutboundMessageStatus.DELIVERED,
   OutboundMessageStatus.DEAD_LETTER,
 ]);
+const INBOUND_DISPATCH_LEASE_MS = Math.max(
+  Number.parseInt(process.env.CHANNEL_INBOUND_DISPATCH_LEASE_MS ?? '120000', 10),
+  10_000,
+);
+const INBOUND_DISPATCH_RETRY_DELAY_MS = Math.max(
+  Number.parseInt(
+    process.env.CHANNEL_INBOUND_DISPATCH_RETRY_DELAY_MS ?? '5000',
+    10,
+  ),
+  500,
+);
 
 function redactedMessage(error: unknown) {
   return (
@@ -104,7 +116,11 @@ export class ChannelsService {
     return connections.map((connection) => this.toSafeConnection(connection));
   }
 
-  async createConnection(orgId: string, dto: CreateChannelConnectionDto) {
+  async createConnection(
+    orgId: string,
+    dto: CreateChannelConnectionDto,
+    actorUserId?: string,
+  ) {
     if (dto.provider !== ChannelProvider.MOCK_EMAIL) {
       throw new BadRequestException(
         'Only MOCK_EMAIL is available in zero-spend local mode',
@@ -128,6 +144,14 @@ export class ChannelsService {
       },
     });
 
+    await this.recordChannelAudit({
+      orgId,
+      actorUserId,
+      action: 'channel_connection.created',
+      targetId: connection.id,
+      metadata: { provider: connection.provider },
+    });
+
     return this.toSafeConnection(connection);
   }
 
@@ -147,6 +171,7 @@ export class ChannelsService {
     orgId: string,
     connectionId: string,
     dto: UpdateChannelConnectionDto,
+    actorUserId?: string,
   ) {
     await this.getConnection(orgId, connectionId);
 
@@ -160,6 +185,14 @@ export class ChannelsService {
       },
     });
 
+    await this.recordChannelAudit({
+      orgId,
+      actorUserId,
+      action: 'channel_connection.updated',
+      targetId: connection.id,
+      metadata: { provider: connection.provider },
+    });
+
     return this.toSafeConnection(connection);
   }
 
@@ -167,6 +200,7 @@ export class ChannelsService {
     orgId: string,
     connectionId: string,
     enabled: boolean,
+    actorUserId?: string,
   ) {
     await this.getConnection(orgId, connectionId);
 
@@ -182,10 +216,24 @@ export class ChannelsService {
       },
     });
 
+    await this.recordChannelAudit({
+      orgId,
+      actorUserId,
+      action: enabled
+        ? 'channel_connection.enabled'
+        : 'channel_connection.disabled',
+      targetId: connection.id,
+      metadata: { provider: connection.provider },
+    });
+
     return this.toSafeConnection(connection);
   }
 
-  async testConnection(orgId: string, connectionId: string) {
+  async testConnection(
+    orgId: string,
+    connectionId: string,
+    actorUserId?: string,
+  ) {
     const connection = await this.prisma.channelConnection.findFirst({
       where: { id: connectionId, organizationId: orgId },
     });
@@ -205,6 +253,13 @@ export class ChannelsService {
         lastErrorRedacted: result?.ok ? null : 'Mock provider health check failed',
       },
     });
+    await this.recordChannelAudit({
+      orgId,
+      actorUserId,
+      action: 'channel_connection.tested',
+      targetId: connection.id,
+      metadata: { provider: connection.provider, ok: result?.ok ?? true },
+    });
 
     return {
       ok: result?.ok ?? true,
@@ -213,9 +268,15 @@ export class ChannelsService {
     };
   }
 
-  async ingestWebhook(publicId: string, payload: unknown, signature?: string | null) {
+  async ingestWebhook(
+    publicId: string,
+    payload: unknown,
+    signature?: string | null,
+    rawBody?: Buffer,
+  ) {
     const payloadText = stableStringify(payload);
-    if (Buffer.byteLength(payloadText, 'utf8') > MAX_WEBHOOK_BYTES) {
+    const payloadBytes = rawBody?.length ?? Buffer.byteLength(payloadText, 'utf8');
+    if (payloadBytes > MAX_WEBHOOK_BYTES) {
       throw new BadRequestException('Webhook payload too large');
     }
 
@@ -230,10 +291,11 @@ export class ChannelsService {
     const provider = this.getProvider(connection.provider);
     const verified = await provider.verifyWebhook({
       payload,
+      rawBody,
       signatureHeader: signature,
       secretReference: connection.webhookSigningSecretReference,
     });
-    const payloadHash = sha256Hex(payloadText);
+    const payloadHash = sha256Hex(rawBody ?? payloadText);
     const correlationId = getCorrelationContext()?.correlationId ?? null;
     const fallbackEventId = `unverified:${payloadHash.slice(0, 32)}`;
 
@@ -304,8 +366,9 @@ export class ChannelsService {
         return this.processInboundMessage(tx, connection, receipt.id, parsed.inbound);
       });
 
-      if (result.run) {
-        await this.enqueueSupportRun(result.run);
+      const dispatchId = 'dispatchId' in result ? result.dispatchId : null;
+      if (dispatchId) {
+        await this.dispatchPendingInbound();
       }
       this.metrics.incrementChannelWebhook(
         connection.provider,
@@ -441,6 +504,17 @@ export class ChannelsService {
         outboundMessageId: outbound.id,
         actorUserId,
       });
+      await tx.channelAuditEvent.create({
+        data: {
+          organizationId: orgId,
+          actorUserId,
+          action: 'outbound_message.replayed',
+          targetType: 'OutboundMessage',
+          targetId: outbound.id,
+          correlationId: getCorrelationContext()?.correlationId ?? null,
+          metadata: { ticketId: outbound.ticketId },
+        },
+      });
     });
 
     await this.enqueueDelivery(outbound.id);
@@ -470,6 +544,17 @@ export class ChannelsService {
       await this.appendTimelineEvent(tx, orgId, outbound.ticketId, AgentEventType.CHANNEL_OUTBOUND_CANCELLED, {
         outboundMessageId: outbound.id,
         actorUserId,
+      });
+      await tx.channelAuditEvent.create({
+        data: {
+          organizationId: orgId,
+          actorUserId,
+          action: 'outbound_message.cancelled',
+          targetType: 'OutboundMessage',
+          targetId: outbound.id,
+          correlationId: getCorrelationContext()?.correlationId ?? null,
+          metadata: { ticketId: outbound.ticketId },
+        },
       });
       return updated;
     });
@@ -562,6 +647,20 @@ export class ChannelsService {
       { draftId: draft.id, outboundMessageId: outbound.id },
       draft.agentRunId ?? undefined,
     );
+    await tx.channelAuditEvent.create({
+      data: {
+        organizationId: orgId,
+        actorUserId,
+        action: 'outbound_message.queued_from_approval',
+        targetType: 'OutboundMessage',
+        targetId: outbound.id,
+        correlationId: getCorrelationContext()?.correlationId ?? null,
+        metadata: {
+          ticketId: draft.ticketId,
+          draftId: draft.id,
+        },
+      },
+    });
     this.metrics.incrementChannelOutboundQueued(
       conversation.channelConnection.provider,
     );
@@ -577,6 +676,132 @@ export class ChannelsService {
     );
 
     return String(job.id);
+  }
+
+  async dispatchPendingInbound(limit = 25) {
+    const now = new Date();
+    const candidates = await this.prisma.inboundDispatch.findMany({
+      where: {
+        OR: [
+          {
+            status: {
+              in: [InboundDispatchStatus.PENDING, InboundDispatchStatus.FAILED],
+            },
+            availableAt: { lte: now },
+          },
+          {
+            status: InboundDispatchStatus.PROCESSING,
+            lockExpiresAt: { lt: now },
+          },
+        ],
+      },
+      orderBy: [{ availableAt: 'asc' }, { createdAt: 'asc' }],
+      take: limit,
+    });
+
+    const results: Array<{
+      id: string;
+      status: InboundDispatchStatus;
+      jobId?: string;
+      errorCode?: string;
+    }> = [];
+    for (const dispatch of candidates) {
+      const lockOwner = `api:${process.pid}:${Date.now()}:${dispatch.id}`;
+      const claimed = await this.prisma.inboundDispatch.updateMany({
+        where: {
+          id: dispatch.id,
+          OR: [
+            {
+              status: {
+                in: [
+                  InboundDispatchStatus.PENDING,
+                  InboundDispatchStatus.FAILED,
+                ],
+              },
+              availableAt: { lte: now },
+            },
+            {
+              status: InboundDispatchStatus.PROCESSING,
+              lockExpiresAt: { lt: now },
+            },
+          ],
+        },
+        data: {
+          status: InboundDispatchStatus.PROCESSING,
+          claimedAt: now,
+          lockOwner,
+          lockExpiresAt: new Date(now.getTime() + INBOUND_DISPATCH_LEASE_MS),
+          attemptCount: { increment: 1 },
+          lastErrorCode: null,
+          lastErrorRedacted: null,
+        },
+      });
+
+      if (claimed.count !== 1) {
+        continue;
+      }
+
+      const current = await this.prisma.inboundDispatch.findUnique({
+        where: { id: dispatch.id },
+      });
+      if (!current) {
+        continue;
+      }
+
+      try {
+        const payload = current.payload as {
+          orgId: string;
+          runId: string;
+          ticketId: string;
+          subject: string;
+          body: string;
+          customerEmail: string;
+          correlationId?: string | null;
+          triggerType: string;
+          enqueuedAt: string;
+        };
+        const job = await this.supportQueue.add('ticket.process', payload, {
+          jobId: `support-${current.runId}`,
+        });
+
+        await this.prisma.inboundDispatch.update({
+          where: { id: current.id },
+          data: {
+            status: InboundDispatchStatus.COMPLETED,
+            completedAt: new Date(),
+            lockOwner: null,
+            lockExpiresAt: null,
+            jobId: String(job.id),
+            lastErrorCode: null,
+            lastErrorRedacted: null,
+          },
+        });
+        results.push({
+          id: current.id,
+          status: InboundDispatchStatus.COMPLETED,
+          jobId: String(job.id),
+        });
+      } catch (error) {
+        await this.prisma.inboundDispatch.update({
+          where: { id: current.id },
+          data: {
+            status: InboundDispatchStatus.PENDING,
+            availableAt: new Date(Date.now() + INBOUND_DISPATCH_RETRY_DELAY_MS),
+            lockOwner: null,
+            lockExpiresAt: null,
+            lastErrorCode: 'QUEUE_ENQUEUE_FAILED',
+            lastErrorRedacted: redactedMessage(error),
+          },
+        });
+        results.push({
+          id: current.id,
+          status: InboundDispatchStatus.PENDING,
+          errorCode: 'QUEUE_ENQUEUE_FAILED',
+        });
+      }
+    }
+
+    return results;
   }
 
   private async processInboundMessage(
@@ -610,6 +835,7 @@ export class ChannelsService {
     const runData = await this.ensureTicketAndRun(tx, {
       orgId,
       conversationId: conversation.id,
+      webhookReceiptId: receiptId,
       ticketId: conversation.ticketId,
       subject: event.subject ?? '(no subject)',
       body,
@@ -725,7 +951,7 @@ export class ChannelsService {
         conversationId: conversation.id,
         externalMessageId: externalMessage.id,
       },
-      run: runData,
+      dispatchId: runData.dispatchId,
     };
   }
 
@@ -765,19 +991,44 @@ export class ChannelsService {
       : failed
         ? OutboundMessageStatus.FAILED
         : OutboundMessageStatus.SENT;
+    const isAlreadyDelivered = outbound.status === OutboundMessageStatus.DELIVERED;
+    const isDuplicateSent =
+      outbound.status === OutboundMessageStatus.SENT && nextStatus === OutboundMessageStatus.SENT;
 
-    if (outbound.status !== OutboundMessageStatus.DELIVERED) {
-      await tx.outboundMessage.update({
-        where: { id: outbound.id },
+    if (isAlreadyDelivered || isDuplicateSent) {
+      await tx.webhookReceipt.update({
+        where: { id: receiptId },
         data: {
-          status: nextStatus,
-          deliveredAt: delivered ? callback.occurredAt : outbound.deliveredAt,
-          failedAt: failed ? callback.occurredAt : outbound.failedAt,
-          lastErrorCode: failed ? callback.status.toUpperCase() : null,
-          lastErrorRedacted: failed ? `Provider callback: ${callback.status}` : null,
+          status: WebhookReceiptStatus.PROCESSED,
+          processedAt: new Date(),
+          metadata: {
+            ignoredCallbackStatus: callback.status,
+            currentOutboundStatus: outbound.status,
+          },
         },
       });
+      return {
+        response: {
+          ok: true,
+          ignored: true,
+          reason: 'terminal_or_duplicate_callback',
+          outboundMessageId: outbound.id,
+          status: outbound.status,
+        },
+        run: null,
+      };
     }
+
+    await tx.outboundMessage.update({
+      where: { id: outbound.id },
+      data: {
+        status: nextStatus,
+        deliveredAt: delivered ? callback.occurredAt : outbound.deliveredAt,
+        failedAt: failed ? callback.occurredAt : outbound.failedAt,
+        lastErrorCode: failed ? callback.status.toUpperCase() : null,
+        lastErrorRedacted: failed ? `Provider callback: ${callback.status}` : null,
+      },
+    });
 
     await tx.webhookReceipt.update({
       where: { id: receiptId },
@@ -953,6 +1204,7 @@ export class ChannelsService {
     input: {
       orgId: string;
       conversationId: string;
+      webhookReceiptId: string;
       ticketId?: string | null;
       subject: string;
       body: string;
@@ -989,6 +1241,28 @@ export class ChannelsService {
         actorType: 'SYSTEM',
         source: 'channel',
       }, run.id);
+      const dispatch = await tx.inboundDispatch.upsert({
+        where: { idempotencyKey: `inbound-run:${run.id}:support:v1` },
+        update: {},
+        create: {
+          organizationId: input.orgId,
+          ticketId: input.ticketId,
+          runId: run.id,
+          webhookReceiptId: input.webhookReceiptId,
+          idempotencyKey: `inbound-run:${run.id}:support:v1`,
+          payload: {
+            orgId: input.orgId,
+            runId: run.id,
+            ticketId: input.ticketId,
+            subject: input.subject,
+            body: input.body,
+            customerEmail: input.customerEmail,
+            correlationId: run.correlationId,
+            triggerType: AgentRunTrigger.TICKET_CREATED,
+            enqueuedAt: queuedAt.toISOString(),
+          },
+        },
+      });
       return {
         orgId: input.orgId,
         runId: run.id,
@@ -998,6 +1272,7 @@ export class ChannelsService {
         customerEmail: input.customerEmail,
         correlationId: run.correlationId,
         queuedAt,
+        dispatchId: dispatch.id,
       };
     }
 
@@ -1037,6 +1312,28 @@ export class ChannelsService {
       actorType: 'SYSTEM',
       source: 'channel',
     }, run.id);
+    const dispatch = await tx.inboundDispatch.upsert({
+      where: { idempotencyKey: `inbound-run:${run.id}:support:v1` },
+      update: {},
+      create: {
+        organizationId: input.orgId,
+        ticketId: ticket.id,
+        runId: run.id,
+        webhookReceiptId: input.webhookReceiptId,
+        idempotencyKey: `inbound-run:${run.id}:support:v1`,
+        payload: {
+          orgId: input.orgId,
+          runId: run.id,
+          ticketId: ticket.id,
+          subject: ticket.subject,
+          body: input.body,
+          customerEmail: input.customerEmail,
+          correlationId: run.correlationId,
+          triggerType: AgentRunTrigger.TICKET_CREATED,
+          enqueuedAt: queuedAt.toISOString(),
+        },
+      },
+    });
 
     return {
       orgId: input.orgId,
@@ -1047,6 +1344,7 @@ export class ChannelsService {
       customerEmail: input.customerEmail,
       correlationId: run.correlationId,
       queuedAt,
+      dispatchId: dispatch.id,
     };
   }
 
@@ -1136,6 +1434,26 @@ export class ChannelsService {
       throw new BadRequestException(`Unsupported channel provider ${providerName}`);
     }
     return provider;
+  }
+
+  private async recordChannelAudit(input: {
+    orgId: string;
+    actorUserId?: string;
+    action: string;
+    targetId: string;
+    metadata?: Prisma.InputJsonValue;
+  }) {
+    await this.prisma.channelAuditEvent.create({
+      data: {
+        organizationId: input.orgId,
+        actorUserId: input.actorUserId,
+        action: input.action,
+        targetType: 'ChannelConnection',
+        targetId: input.targetId,
+        correlationId: getCorrelationContext()?.correlationId ?? null,
+        metadata: input.metadata,
+      },
+    });
   }
 
   private toSafeConnection(connection: {

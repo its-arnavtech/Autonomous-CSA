@@ -5,7 +5,14 @@ import {
 } from '@agentic-support/observability';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import type { Express, NextFunction, Request, Response } from 'express';
+import {
+  json,
+  urlencoded,
+  type Express,
+  type NextFunction,
+  type Request,
+  type Response,
+} from 'express';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { RateLimitService } from './rate-limit/rate-limit.service';
@@ -17,9 +24,21 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
     logger: apiLogger,
+    bodyParser: false,
   });
   app.useLogger(apiLogger);
   app.enableShutdownHooks();
+  app.use(
+    json({
+      limit: '1mb',
+      verify: (req, _res, buf) => {
+        if ((req as Request).originalUrl?.startsWith('/webhooks/channels/')) {
+          (req as Request & { rawBody?: Buffer }).rawBody = Buffer.from(buf);
+        }
+      },
+    }),
+  );
+  app.use(urlencoded({ extended: true, limit: '100kb' }));
   (app.getHttpAdapter().getInstance() as Express).set(
     'trust proxy',
     config.trustProxy,

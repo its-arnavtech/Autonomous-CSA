@@ -49,6 +49,7 @@ export type ParsedChannelEvent =
 
 export type VerifyWebhookInput = {
   payload: unknown;
+  rawBody?: Buffer;
   signatureHeader?: string | null;
   secretReference?: string | null;
 };
@@ -102,6 +103,7 @@ export type ChannelDeliveryError = {
 
 export interface SupportChannelProvider {
   readonly providerName: ChannelProvider;
+  readonly webhookSignatureMode: 'raw-body' | 'canonical-json';
   verifyWebhook(input: VerifyWebhookInput): Promise<VerifiedWebhookResult>;
   parseEvent(input: { payload: unknown }): Promise<ParsedChannelEvent>;
   sendMessage(input: SendChannelMessageInput): Promise<ChannelSendResult>;

@@ -2,6 +2,8 @@
 
 `OutboundMessage` is the transactional outbox for channel delivery.
 
+`InboundDispatch` is the transactional outbox for inbound support-run dispatch.
+
 Approval behavior:
 
 - Only `APPROVED` drafts can create channel outbound rows.
@@ -20,3 +22,12 @@ Worker behavior:
 - Permanent or exhausted failures become `DEAD_LETTER` and create `OperationalFailure`.
 
 Postgres is the source of truth. Redis is wake-up infrastructure.
+
+Inbound dispatch behavior:
+
+- The webhook transaction creates `InboundDispatch` with idempotency key `inbound-run:<runId>:support:v1`.
+- The row stores the exact worker payload needed for deterministic recovery.
+- The reconciler claims rows with `lockOwner` and `lockExpiresAt`.
+- Successful BullMQ enqueue marks the row `COMPLETED`.
+- Redis enqueue failure returns the row to `PENDING` with a retry delay.
+- Repeated reconciliation uses deterministic BullMQ job ids and does not create duplicate logical jobs.

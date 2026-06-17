@@ -124,11 +124,12 @@ Required channel checks:
 
 1. Create a mock channel connection.
 2. Send a signed inbound mock webhook.
-3. Verify receipt, customer, conversation, external message, ticket, timeline, and queued agent run.
+3. Verify receipt, customer, conversation, external message, ticket, timeline, queued agent run, and inbound dispatch row.
 4. Approve the generated draft.
-5. Verify `OutboundMessage`, `DeliveryAttempt`, and timeline delivery events.
-6. Send a duplicate webhook and confirm no duplicate ticket/message/run.
-7. Test retryable and permanent mock failure modes.
-8. Confirm dead-letter and owner/admin replay behavior.
+5. Verify inbound dispatch completes after BullMQ enqueue.
+6. Verify `OutboundMessage`, `DeliveryAttempt`, and timeline delivery events.
+7. Send a duplicate webhook and confirm no duplicate ticket/message/run/dispatch.
+8. Test retryable and permanent mock failure modes.
+9. Confirm dead-letter and owner/admin replay behavior.
 
-These checks were documented but not fully executed in this workspace during the implementation turn.
+These checks are documented but were not fully executed against production images in this workspace during the implementation turn.

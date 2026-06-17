@@ -76,9 +76,18 @@ Support channel integration foundation has been added on `support-integration`:
 - Tenant-scoped channel schema and migration.
 - Mock email provider abstraction.
 - Signed webhook ingestion with receipt idempotency.
+- Raw-byte mock webhook signature verification.
+- Durable `InboundDispatch` recovery for Redis enqueue failures.
 - External customer, conversation, message, attachment metadata, and ticket/run creation.
 - Approval-to-outbound transactional state.
 - Channel delivery worker with attempts, retry scheduling, dead-letter, and replay.
 - Channel management UI and ticket delivery visibility.
+- Organization-level channel audit events.
 
-Phase 12 is not yet declared complete because full local E2E verification, backup/restore, load/concurrency tests, Docker validation, restart drills, and push verification have not all been completed in this workspace.
+Verified locally in this workspace:
+
+- Prisma validate/generate/deploy/migrate-check for channel migrations.
+- Focused raw-signature, controller, inbound dispatch, approval, and operations tests.
+- API typecheck and lint after follow-up changes.
+
+Phase 12 is not yet declared complete because production-image E2E verification, backup/restore, load/concurrency tests, restart/failure drills, full root `pnpm.cmd` validation, remote push, and remote CI have not all been completed in this workspace.

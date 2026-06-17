@@ -58,7 +58,13 @@ function extractSecret(secretReference?: string | null) {
 }
 
 function hmac(payload: unknown, secret: string) {
-  return createHmac('sha256', secret).update(stableStringify(payload)).digest('hex');
+  const h = createHmac('sha256', secret);
+  if (Buffer.isBuffer(payload)) {
+    h.update(payload);
+  } else {
+    h.update(stableStringify(payload));
+  }
+  return h.digest('hex');
 }
 
 function safeEqualHex(left: string, right: string) {
@@ -72,6 +78,7 @@ function safeEqualHex(left: string, right: string) {
 
 export class MockEmailProvider implements SupportChannelProvider {
   readonly providerName = ChannelProvider.MOCK_EMAIL;
+  readonly webhookSignatureMode = 'raw-body' as const;
 
   async verifyWebhook(
     input: VerifyWebhookInput,
@@ -85,7 +92,15 @@ export class MockEmailProvider implements SupportChannelProvider {
       };
     }
 
-    const expected = hmac(input.payload, extractSecret(input.secretReference));
+    if (!input.rawBody) {
+      return {
+        verified: false,
+        failureCode: 'MISSING_RAW_BODY',
+        failureMessage: 'Missing raw body for mock channel signature',
+      };
+    }
+
+    const expected = hmac(input.rawBody, extractSecret(input.secretReference));
     const supplied = signature.slice(3);
     if (!/^[a-f0-9]{64}$/i.test(supplied) || !safeEqualHex(expected, supplied)) {
       return {

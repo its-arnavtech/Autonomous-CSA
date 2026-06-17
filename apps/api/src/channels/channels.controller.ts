@@ -9,7 +9,11 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentOrganization } from '../auth/current-organization.decorator';
-import type { TenantMembership } from '../auth/authenticated-user.type';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type {
+  AuthenticatedUser,
+  TenantMembership,
+} from '../auth/authenticated-user.type';
 import { JwtAccessGuard } from '../auth/jwt-access.guard';
 import {
   MANAGE_ORG_ROLES,
@@ -43,11 +47,13 @@ export class ChannelsController {
   @Roles(...MANAGE_ORG_ROLES)
   createConnection(
     @CurrentOrganization() organization: TenantMembership,
+    @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateChannelConnectionDto,
   ) {
     return this.channelsService.createConnection(
       organization.organizationId,
       dto,
+      user.userId,
     );
   }
 
@@ -69,6 +75,7 @@ export class ChannelsController {
   @Roles(...MANAGE_ORG_ROLES)
   updateConnection(
     @CurrentOrganization() organization: TenantMembership,
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id') connectionId: string,
     @Body() dto: UpdateChannelConnectionDto,
   ) {
@@ -76,6 +83,7 @@ export class ChannelsController {
       organization.organizationId,
       connectionId,
       dto,
+      user.userId,
     );
   }
 
@@ -84,12 +92,14 @@ export class ChannelsController {
   @Roles(...MANAGE_ORG_ROLES)
   disableConnection(
     @CurrentOrganization() organization: TenantMembership,
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id') connectionId: string,
   ) {
     return this.channelsService.setConnectionEnabled(
       organization.organizationId,
       connectionId,
       false,
+      user.userId,
     );
   }
 
@@ -98,12 +108,14 @@ export class ChannelsController {
   @Roles(...MANAGE_ORG_ROLES)
   enableConnection(
     @CurrentOrganization() organization: TenantMembership,
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id') connectionId: string,
   ) {
     return this.channelsService.setConnectionEnabled(
       organization.organizationId,
       connectionId,
       true,
+      user.userId,
     );
   }
 
@@ -112,11 +124,13 @@ export class ChannelsController {
   @Roles(...MANAGE_ORG_ROLES)
   testConnection(
     @CurrentOrganization() organization: TenantMembership,
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id') connectionId: string,
   ) {
     return this.channelsService.testConnection(
       organization.organizationId,
       connectionId,
+      user.userId,
     );
   }
 }

@@ -11,6 +11,7 @@ export {
   AgentStepType,
   DraftStatus,
   ExternalMessageDirection,
+  InboundDispatchStatus,
   KnowledgeArticleStatus,
   MessageAttachmentStatus,
   MessageDirection,

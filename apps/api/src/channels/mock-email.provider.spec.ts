@@ -1,10 +1,10 @@
 import { createHmac } from 'node:crypto';
 import { MockEmailProvider } from './mock-email.provider';
-import { sanitizeFilename, sanitizeHtml, stableStringify } from './channel-sanitizer';
+import { sanitizeFilename, sanitizeHtml } from './channel-sanitizer';
 
-function sign(payload: unknown, secret = 'test-secret') {
+function sign(rawBody: string, secret = 'test-secret') {
   return `v1=${createHmac('sha256', secret)
-    .update(stableStringify(payload))
+    .update(rawBody)
     .digest('hex')}`;
 }
 
@@ -22,12 +22,14 @@ describe('MockEmailProvider', () => {
       text: 'Hello',
     },
   };
+  const rawBody = JSON.stringify(payload);
 
-  it('verifies signed mock webhooks', async () => {
+  it('verifies exact raw-body signed mock webhooks', async () => {
     await expect(
       provider.verifyWebhook({
         payload,
-        signatureHeader: sign(payload),
+        rawBody: Buffer.from(rawBody),
+        signatureHeader: sign(rawBody),
         secretReference: 'mock:test-secret',
       }),
     ).resolves.toMatchObject({
@@ -37,16 +39,74 @@ describe('MockEmailProvider', () => {
     });
   });
 
-  it('rejects invalid mock signatures', async () => {
+  it('rejects whitespace-altered payloads for raw signatures', async () => {
+    const prettyBody = JSON.stringify(payload, null, 2);
     await expect(
       provider.verifyWebhook({
         payload,
-        signatureHeader: sign(payload, 'wrong-secret'),
+        rawBody: Buffer.from(prettyBody),
+        signatureHeader: sign(rawBody),
         secretReference: 'mock:test-secret',
       }),
     ).resolves.toMatchObject({
       verified: false,
       failureCode: 'INVALID_SIGNATURE',
+    });
+  });
+
+  it('rejects field-order changes for raw signatures', async () => {
+    const reorderedBody = JSON.stringify({
+      type: payload.type,
+      eventId: payload.eventId,
+      message: payload.message,
+    });
+    await expect(
+      provider.verifyWebhook({
+        payload,
+        rawBody: Buffer.from(reorderedBody),
+        signatureHeader: sign(rawBody),
+        secretReference: 'mock:test-secret',
+      }),
+    ).resolves.toMatchObject({
+      verified: false,
+      failureCode: 'INVALID_SIGNATURE',
+    });
+  });
+
+  it('rejects invalid mock signatures', async () => {
+    await expect(
+      provider.verifyWebhook({
+        payload,
+        rawBody: Buffer.from(rawBody),
+        signatureHeader: sign(rawBody, 'wrong-secret'),
+        secretReference: 'mock:test-secret',
+      }),
+    ).resolves.toMatchObject({
+      verified: false,
+      failureCode: 'INVALID_SIGNATURE',
+    });
+  });
+
+  it('rejects missing signatures and missing raw body', async () => {
+    await expect(
+      provider.verifyWebhook({
+        payload,
+        rawBody: Buffer.from(rawBody),
+        secretReference: 'mock:test-secret',
+      }),
+    ).resolves.toMatchObject({
+      verified: false,
+      failureCode: 'MISSING_SIGNATURE',
+    });
+    await expect(
+      provider.verifyWebhook({
+        payload,
+        signatureHeader: sign(rawBody),
+        secretReference: 'mock:test-secret',
+      }),
+    ).resolves.toMatchObject({
+      verified: false,
+      failureCode: 'MISSING_RAW_BODY',
     });
   });
 

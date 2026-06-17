@@ -440,7 +440,27 @@ export class OperationsService {
     );
     const boundedStart = start < maxStart ? maxStart : start;
 
-    const events = await this.prisma.agentEvent.findMany({
+    const channelAuditDelegate = (
+      this.prisma as unknown as {
+        channelAuditEvent?: {
+          findMany: (args: unknown) => Promise<
+            Array<{
+              id: string;
+              actorUserId: string | null;
+              action: string;
+              targetType: string;
+              targetId: string;
+              correlationId: string | null;
+              metadata: Prisma.JsonValue | null;
+              createdAt: Date;
+            }>
+          >;
+        };
+      }
+    ).channelAuditEvent;
+
+    const [events, channelEvents] = await Promise.all([
+      this.prisma.agentEvent.findMany({
       where: {
         orgId,
         createdAt: {
@@ -454,10 +474,26 @@ export class OperationsService {
       },
       orderBy: [{ createdAt: 'desc' }, { sequence: 'desc' }],
       take: clampLimit(query.limit, 100, 1000),
-    });
+      }),
+      channelAuditDelegate
+        ? channelAuditDelegate.findMany({
+            where: {
+              organizationId: orgId,
+              createdAt: {
+                gte: boundedStart,
+                lte: end,
+              },
+              action: query.eventType,
+              correlationId: query.correlationId,
+            },
+            orderBy: [{ createdAt: 'desc' }],
+            take: clampLimit(query.limit, 100, 1000),
+          })
+        : Promise.resolve([]),
+    ]);
 
-    return events
-      .map((event) => ({
+    return [
+      ...events.map((event) => ({
         id: event.id,
         ticketId: event.ticketId,
         runId: event.runId,
@@ -466,7 +502,25 @@ export class OperationsService {
         correlationId: event.correlationId,
         createdAt: event.createdAt,
         payload: sanitizeForLog(event.payload),
-      }))
+      })),
+      ...channelEvents.map((event) => ({
+        id: event.id,
+        ticketId: null,
+        runId: null,
+        type: event.action,
+        sequence: 0,
+        correlationId: event.correlationId,
+        createdAt: event.createdAt,
+        payload: sanitizeForLog({
+          actorUserId: event.actorUserId,
+          targetType: event.targetType,
+          targetId: event.targetId,
+          metadata: event.metadata,
+        }),
+      })),
+    ]
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+      .slice(0, clampLimit(query.limit, 100, 1000))
       .filter((event) => {
         const payload = event.payload as Record<string, unknown>;
         if (query.actorType && payload.actorType !== query.actorType) {

@@ -105,7 +105,7 @@ Supporting docs:
 - [docs/FAILURE_INJECTION.md](/C:/Autonomous-CSA/docs/FAILURE_INJECTION.md)
 # Support Channel Integration
 
-Phase 12 adds zero-spend mock support channel integration. Start with `/channels` to create a `MOCK_EMAIL` connection, then use:
+Phase 12 adds zero-spend mock support channel integration with raw-byte webhook signatures and DB-backed inbound dispatch recovery. Start with `/channels` to create a `MOCK_EMAIL` connection, then use:
 
 ```powershell
 pnpm channel:mock:inbound

@@ -5,22 +5,9 @@ const apiBaseUrl = process.env.API_BASE_URL ?? 'http://localhost:3001';
 const publicId = process.env.CHANNEL_CONNECTION_PUBLIC_ID;
 const secret = process.env.MOCK_CHANNEL_WEBHOOK_SECRET ?? 'mock-webhook-secret';
 
-function stableStringify(value) {
-  if (value === null || typeof value !== 'object') {
-    return JSON.stringify(value);
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map((entry) => stableStringify(entry)).join(',')}]`;
-  }
-  return `{${Object.keys(value)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
-    .join(',')}}`;
-}
-
-function sign(payload, signingSecret = secret) {
+function signRawBody(rawBody, signingSecret = secret) {
   return `v1=${createHmac('sha256', signingSecret)
-    .update(stableStringify(payload))
+    .update(rawBody)
     .digest('hex')}`;
 }
 
@@ -101,8 +88,11 @@ if (!publicId) {
 }
 
 const payload = payloadFor(action);
+const rawBody = JSON.stringify(payload);
 const signature =
-  action === 'invalid-signature' ? sign(payload, 'wrong-secret') : sign(payload);
+  action === 'invalid-signature'
+    ? signRawBody(rawBody, 'wrong-secret')
+    : signRawBody(rawBody);
 const response = await fetch(
   `${apiBaseUrl.replace(/\/+$/, '')}/webhooks/channels/${encodeURIComponent(
     publicId,
@@ -113,7 +103,7 @@ const response = await fetch(
       'content-type': 'application/json',
       'x-channel-signature': signature,
     },
-    body: JSON.stringify(payload),
+    body: rawBody,
   },
 );
 const text = await response.text();

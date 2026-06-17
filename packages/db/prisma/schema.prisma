@@ -30,8 +30,10 @@ model Organization {
   externalMessages    ExternalMessage[]
   messageAttachments  MessageAttachment[]
   webhookReceipts     WebhookReceipt[]
+  inboundDispatches   InboundDispatch[]
   outboundMessages    OutboundMessage[]
   deliveryAttempts    DeliveryAttempt[]
+  channelAuditEvents  ChannelAuditEvent[]
 }
 
 model User {
@@ -51,6 +53,7 @@ model User {
   sentDrafts        OutboundDraft[] @relation("OutboundDraftSentByUser")
   approvedOutboundMessages OutboundMessage[] @relation("OutboundMessageApprovedByUser")
   resolvedOperationalFailures OperationalFailure[] @relation("OperationalFailureResolvedByUser")
+  channelAuditEvents ChannelAuditEvent[] @relation("ChannelAuditEventActorUser")
 }
 
 model OrganizationMembership {
@@ -103,6 +106,7 @@ model Ticket {
   retrievals    KnowledgeRetrieval[]
   conversations Conversation[]
   outboundMessages OutboundMessage[]
+  inboundDispatches InboundDispatch[]
 
   @@index([orgId])
   @@index([orgId, status])
@@ -152,6 +156,7 @@ model AgentRun {
   steps           AgentStep[]
   retrievals      KnowledgeRetrieval[]
   guardrailChecks AgentGuardrailCheck[]
+  inboundDispatches InboundDispatch[]
 
   @@index([ticketId])
   @@index([correlationId])
@@ -519,6 +524,7 @@ model WebhookReceipt {
   metadata               Json?
   organization           Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   channelConnection      ChannelConnection    @relation(fields: [channelConnectionId], references: [id], onDelete: Cascade)
+  inboundDispatches      InboundDispatch[]
 
   @@unique([channelConnectionId, providerEventId])
   @@index([organizationId])
@@ -526,6 +532,40 @@ model WebhookReceipt {
   @@index([providerEventId])
   @@index([status])
   @@index([receivedAt])
+}
+
+model InboundDispatch {
+  id                String                @id @default(uuid())
+  organizationId    String
+  ticketId          String
+  runId             String
+  webhookReceiptId  String?
+  idempotencyKey    String                @unique
+  status            InboundDispatchStatus @default(PENDING)
+  availableAt       DateTime              @default(now())
+  claimedAt         DateTime?
+  completedAt       DateTime?
+  attemptCount      Int                   @default(0)
+  lockOwner         String?
+  lockExpiresAt     DateTime?
+  lastErrorCode     String?
+  lastErrorRedacted String?
+  jobId             String?
+  payload           Json
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ticket            Ticket                @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  run               AgentRun              @relation(fields: [runId], references: [id], onDelete: Cascade)
+  webhookReceipt    WebhookReceipt?       @relation(fields: [webhookReceiptId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([ticketId])
+  @@index([runId])
+  @@index([webhookReceiptId])
+  @@index([status, availableAt])
+  @@index([lockExpiresAt])
+  @@index([createdAt])
 }
 
 model OutboundMessage {
@@ -599,6 +639,26 @@ model DeliveryAttempt {
   @@index([organizationId])
   @@index([outboundMessageId])
   @@index([startedAt])
+}
+
+model ChannelAuditEvent {
+  id             String       @id @default(uuid())
+  organizationId String
+  actorUserId    String?
+  action         String
+  targetType     String
+  targetId       String
+  correlationId  String?
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actorUser      User?        @relation("ChannelAuditEventActorUser", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([actorUserId])
+  @@index([targetType, targetId])
+  @@index([correlationId])
+  @@index([action])
 }
 
 enum TicketStatus {
@@ -824,4 +884,11 @@ enum DeliveryAttemptOutcome {
   RETRYABLE_FAILURE
   PERMANENT_FAILURE
   UNKNOWN
+}
+
+enum InboundDispatchStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
 }

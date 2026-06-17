@@ -94,7 +94,8 @@ describe('ApprovalsController', () => {
   it.each(['APPROVED', 'REJECTED'] as const)(
     'updates approval status to %s',
     async (decision) => {
-      const { controller, prisma, supportService } = createController();
+      const { controller, prisma, supportService, channelsService } =
+        createController();
       supportService.getApprovalOrThrow.mockResolvedValue({
         approval: {
           id: 'approval_1',
@@ -118,6 +119,9 @@ describe('ApprovalsController', () => {
       prisma.outboundDraft.update.mockResolvedValue({
         id: 'draft_1',
         status: decision,
+      });
+      channelsService.createOutboundForApprovedDraft.mockResolvedValue({
+        id: 'outbound_1',
       });
 
       const approval = await controller.updateApproval(
@@ -143,6 +147,24 @@ describe('ApprovalsController', () => {
         },
       });
       expect(prisma.outboundDraft.update).toHaveBeenCalled();
+      if (decision === 'APPROVED') {
+        expect(
+          channelsService.createOutboundForApprovedDraft,
+        ).toHaveBeenCalledWith(
+          prisma,
+          'org_1',
+          'draft_1',
+          'user_1',
+        );
+        expect(channelsService.enqueueDelivery).toHaveBeenCalledWith(
+          'outbound_1',
+        );
+      } else {
+        expect(
+          channelsService.createOutboundForApprovedDraft,
+        ).not.toHaveBeenCalled();
+        expect(channelsService.enqueueDelivery).not.toHaveBeenCalled();
+      }
       expect(approval.status).toBe(decision);
     },
   );

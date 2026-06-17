@@ -37,6 +37,6 @@ Status: production is no-go. Phase 11A local/CI staging verification may be comp
 Production review is no-go until Phase 11B hosted staging gates are explicitly re-enabled and pass. The current zero-spend policy does not approve production deployment, paid hosted staging, or an RC tag based only on local verification.
 # Phase 12 Channel Gate
 
-Support channels remain zero-spend and mock-first. Do not enable a real provider until raw-body webhook verification, real credential storage, attachment scanning/download design, and provider-specific retry semantics are reviewed.
+Support channels remain zero-spend and mock-first. Do not enable a real provider until provider-specific signing rules, replay windows, real credential storage, attachment scanning/download design, and provider-specific retry semantics are reviewed.
 
 Phase 12 is not production-go until local end-to-end channel verification, backup/restore, load/concurrency checks, and restart drills pass.

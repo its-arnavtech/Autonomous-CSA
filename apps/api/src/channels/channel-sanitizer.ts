@@ -30,7 +30,7 @@ export function stableStringify(value: unknown): string {
     .join(',')}}`;
 }
 
-export function sha256Hex(value: string) {
+export function sha256Hex(value: string | Buffer) {
   return createHash('sha256').update(value).digest('hex');
 }
 

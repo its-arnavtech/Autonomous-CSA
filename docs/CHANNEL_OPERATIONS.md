@@ -20,3 +20,10 @@ Available API actions:
 Operations summary includes pending outbound, retry-scheduled outbound, dead-lettered delivery, and recent channel failures. Replay is RBAC-protected to owner/admin roles and cannot replay sent, delivered, or cancelled messages.
 
 Provider failure modes for mock testing are configured on the connection JSON as `failureMode`: `retryable`, `429`, `503`, `timeout`, `permanent`, `invalid_recipient`, or `malformed`.
+
+Audit visibility:
+
+- Connection create/update/enable/disable/test writes `ChannelAuditEvent`.
+- Approval-triggered outbound queueing writes `ChannelAuditEvent`.
+- Outbound replay and cancellation write `ChannelAuditEvent`.
+- Ticket-specific delivery progress remains in `AgentEvent`.
