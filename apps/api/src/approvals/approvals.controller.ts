@@ -118,7 +118,7 @@ export class ApprovalsController {
       });
 
       if (approval.outboundDraftId) {
-        if (dto.status === 'APPROVED') {
+        if (dto.status === ApprovalStatus.APPROVED) {
           await tx.outboundDraft.update({
             where: { id: approval.outboundDraftId },
             data: {
@@ -156,7 +156,7 @@ export class ApprovalsController {
           outboundMessageId = outbound?.id ?? null;
         }
 
-        if (dto.status === 'REJECTED') {
+        if (dto.status === ApprovalStatus.REJECTED) {
           await tx.outboundDraft.update({
             where: { id: approval.outboundDraftId },
             data: {

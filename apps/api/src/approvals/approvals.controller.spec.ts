@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { ApprovalStatus } from '@agentic-support/db';
 import { ApprovalsController } from './approvals.controller';
 
 describe('ApprovalsController', () => {
@@ -46,7 +47,7 @@ describe('ApprovalsController', () => {
     });
     prisma.humanApproval.create.mockResolvedValue({
       id: 'approval_1',
-      status: 'PENDING',
+      status: ApprovalStatus.PENDING,
     });
 
     const approval = await controller.createApproval(
@@ -64,11 +65,11 @@ describe('ApprovalsController', () => {
         orgId: 'org_1',
         ticketId: 'ticket_1',
         agentRunId: undefined,
-        status: 'PENDING',
+        status: ApprovalStatus.PENDING,
         proposedResponse: 'Draft response',
       },
     });
-    expect(approval.status).toBe('PENDING');
+    expect(approval.status).toBe(ApprovalStatus.PENDING);
   });
 
   it('rejects an unrelated agentRunId during approval creation', async () => {
@@ -91,7 +92,7 @@ describe('ApprovalsController', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it.each(['APPROVED', 'REJECTED'] as const)(
+  it.each([ApprovalStatus.APPROVED, ApprovalStatus.REJECTED] as const)(
     'updates approval status to %s',
     async (decision) => {
       const { controller, prisma, supportService, channelsService } =
@@ -139,7 +140,7 @@ describe('ApprovalsController', () => {
       );
 
       expect(prisma.humanApproval.updateMany).toHaveBeenCalledWith({
-        where: { id: 'approval_1', status: 'PENDING' },
+        where: { id: 'approval_1', status: ApprovalStatus.PENDING },
         data: {
           status: decision,
           reviewerNote: 'Reviewed by QA',
@@ -147,7 +148,7 @@ describe('ApprovalsController', () => {
         },
       });
       expect(prisma.outboundDraft.update).toHaveBeenCalled();
-      if (decision === 'APPROVED') {
+      if (decision === ApprovalStatus.APPROVED) {
         expect(
           channelsService.createOutboundForApprovedDraft,
         ).toHaveBeenCalledWith(
