@@ -201,7 +201,7 @@ jobs:
           echo "${{ matrix.service }}=${{ env.IMAGE_PREFIX }}-${{ matrix.service }}@${{ steps.build.outputs.digest }}" >> staging-artifacts/images.txt
 
       - name: Upload image digest artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: staging-image-${{ matrix.service }}
           path: staging-artifacts/images.txt
@@ -317,7 +317,7 @@ jobs:
           flyctl releases --app "${FLY_WEB_APP}" --json > staging-artifacts/fly-web-releases.json
 
       - name: Upload Fly release artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: staging-fly-releases
           path: staging-artifacts/fly-*-releases.json
