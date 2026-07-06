@@ -1,9 +1,9 @@
 {
   "devDependencies": {
-    "bullmq": "5.78.1",
+    "bullmq": "5.79.2",
     "cross-env": "^10.1.0",
     "ioredis": "5.11.1",
-    "turbo": "^2.9.18"
+    "turbo": "^2.10.3"
   },
   "name": "agentic-support-saas",
   "version": "1.0.0",
